@@ -1,5 +1,8 @@
 # fallacy
 
+[![GoDoc](https://godoc.org/github.com/qua3k/fallacy?status.svg)](https://godoc.org/github.com/qua3k/fallacy)
+
+
 "fallacy bot good" – a logician
 
 ## features
