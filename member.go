@@ -12,7 +12,7 @@ import (
 
 // IsDisplayNameOrAvatar: check if a membership event is a display name/avatar
 // change
-func IsDisplayOrAvatar(ev *gomatrix.Event) bool {
+func isDisplayOrAvatar(ev *gomatrix.Event) bool {
 	m := ev.Content["membership"].(string) // required
 	u := ev.Unsigned["prev_content"].(map[string]interface{})
 	if u != nil {
@@ -25,9 +25,9 @@ func IsDisplayOrAvatar(ev *gomatrix.Event) bool {
 }
 
 // WelcomeMember: welcome a member via their display name or mxid
-func (f *FallacyClient) WelcomeMember(displayName, sender, roomID string) (err error) {
+func (f *Fallacy) WelcomeMember(displayName, sender, roomID string) (err error) {
 	name := sender
-	if displayName != "" {
+	if displayName != " " {
 		name = displayName
 	}
 	m := strings.Join([]string{"Welcome", name + "!", "Howdy?"}, " ")

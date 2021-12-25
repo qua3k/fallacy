@@ -21,9 +21,9 @@ func modPower(event interface{}) (level int) {
 	return
 }
 
-// GetMessageLevel Returns the level users are required to have to send
+// getMessageLevel Returns the level users are required to have to send
 // messages.
-func GetMessageLevel(content map[string]interface{}) (level int) {
+func getMessageLevel(content map[string]interface{}) (level int) {
 	level = 50
 	if d, ok := content["events_default"].(int); d != 0 && ok {
 		level = d
@@ -40,7 +40,7 @@ func GetMessageLevel(content map[string]interface{}) (level int) {
 
 // userCanMute: determine if the user is allowed to mute someone by checking
 // ban/kick/redact permissions
-func (f *FallacyClient) userCanMute(pl map[string]interface{}, userID string) bool {
+func (f *Fallacy) userCanMute(pl map[string]interface{}, userID string) bool {
 	bp, kp, rp := modPower(pl["ban"]), modPower(pl["kick"]), modPower(pl["redact"])
 	p := []int{kp, bp, rp}
 
@@ -69,7 +69,7 @@ func (f *FallacyClient) userCanMute(pl map[string]interface{}, userID string) bo
 }
 
 // secret
-func (f *FallacyClient) spiteTech(body, roomID string) {
+func (f *Fallacy) spiteTech(body, roomID string) {
 	if strings.Contains(body, "firefox") {
 		f.Client.SendSticker(roomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
 	}
@@ -79,13 +79,13 @@ func (f *FallacyClient) spiteTech(body, roomID string) {
 // It fetches a power levels event, then searches for the power level members are
 // allowed to send messages, first by the `events_default` key and then the
 // `m.room.message` key of `events`.
-func (f *FallacyClient) MuteUser(roomID, senderID, targetID string) (err error) {
+func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 	c, err := f.Client.LookUpStateEvent("m.room.power_levels", roomID, "")
 	if err == nil {
 		if !f.userCanMute(c, senderID) {
 			return errors.New("user not authorized to mute")
 		}
-		level := GetMessageLevel(c)
+		level := getMessageLevel(c)
 		if u, ok := c["users"].(map[string]int); ok {
 			u[targetID] = level - 1
 		}
@@ -99,13 +99,13 @@ func (f *FallacyClient) MuteUser(roomID, senderID, targetID string) (err error) 
 // It fetches a power levels event, then searches for the power level members are
 // allowed to send messages, first by the `events_default` key and then the
 // `m.room.message` key of `events`.
-func (f *FallacyClient) UnmuteUser(roomID, senderID, targetID string) (err error) {
+func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
 	c, err := f.Client.LookUpStateEvent("m.room.power_levels", roomID, "")
 	if err == nil {
 		if !f.userCanMute(c, senderID) {
 			return errors.New("user not authorized to unmute")
 		}
-		level := GetMessageLevel(c)
+		level := getMessageLevel(c)
 		if u, ok := c["users"].(map[string]int); ok {
 			u[targetID] = level + 1
 		}
@@ -117,7 +117,7 @@ func (f *FallacyClient) UnmuteUser(roomID, senderID, targetID string) (err error
 
 // PurgeMessages: redact a number of room events in a room, optionally ending at
 // a specific message.
-func (f *FallacyClient) PurgeMessages(roomID, end string, limit int) error {
+func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
 	resp, err := f.Client.Messages(roomID, "", "", end, 'b', limit)
 	if err != nil {
 		return err
