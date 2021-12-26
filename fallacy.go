@@ -109,10 +109,7 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 // HandleTombStone: handle m.room.tombstone events
 func (f *Fallacy) HandleTombstone(ev *gomatrix.Event) {
 	r := ev.Content["replacement_room"].(string) // `replacement_room` is required by spec
-	_, err := f.Client.JoinRoom(r, "", map[string]string{
-		"reason": "following room upgrade",
-	})
-	if err != nil {
-		log.Println(err)
+	if _, err := f.Client.JoinRoom(r, "", map[string]string{"reason": "following room upgrade"}); err != nil {
+		log.Println("attempting to join `replacement_room` failed with error: ", err)
 	}
 }
