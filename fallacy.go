@@ -60,15 +60,16 @@ func (f *Fallacy) printHelp(roomID string) {
 	f.Client.SendNotice(roomID, usage)
 }
 
+// HandleMember: Handle `m.room.member` events
 func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
-	s, r := ev.Sender, ev.RoomID
-	d, ok := ev.Content["displayname"].(string)
+	send, room := ev.Sender, ev.RoomID
+	display, ok := ev.Content["displayname"].(string)
 	if !ok {
-		d = ev.Sender
+		display = ev.Sender
 	}
 
 	if f.Config.Welcome && !isDisplayOrAvatar(ev) {
-		f.WelcomeMember(d, s, r)
+		f.WelcomeMember(display, send, room)
 	}
 }
 

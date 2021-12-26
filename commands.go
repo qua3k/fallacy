@@ -14,58 +14,54 @@ import (
 
 // modPower: the default mod power for many matrix events
 func modPower(event interface{}) (level int) {
-	level, ok := event.(int)
-	if !ok {
+	var ok bool
+	if level, ok = event.(int); !ok {
 		level = 50
 	}
 	return
 }
 
-// getMessageLevel Returns the level users are required to have to send
+// getMessageLevel: returns the level users are required to have to send
 // messages.
 func getMessageLevel(content map[string]interface{}) (level int) {
-	level = 50
-	if d, ok := content["events_default"].(int); d != 0 && ok {
+	if d, ok := content["events_default"].(int); ok {
 		level = d
 	}
 
 	if pls, ok := content["events"].(map[string]int); ok {
-		if m, ok := pls["m.room.message"]; m != 0 && ok {
+		if m, ok := pls["m.room.message"]; ok {
 			level = m
 		}
 	}
+	return
+}
 
+// minInt: variadic function to find min of integers
+func minInt(i ...int) (m int) {
+	m = i[0]
+	for _, v := range i {
+		if v < m {
+			m = v
+		}
+	}
 	return
 }
 
 // userCanMute: determine if the user is allowed to mute someone by checking
 // ban/kick/redact permissions
-func (f *Fallacy) userCanMute(pl map[string]interface{}, userID string) bool {
-	bp, kp, rp := modPower(pl["ban"]), modPower(pl["kick"]), modPower(pl["redact"])
-	p := []int{kp, bp, rp}
-
-	min := p[0]
-	for _, value := range p {
-		if value < min {
-			min = value
-		}
-	}
-
+func (f *Fallacy) userCanMute(pls map[string]interface{}, userID string) bool {
 	var usrPwr int
-	if usrDef, ok := pl["users_default"].(int); ok {
+	if usrDef, ok := pls["users_default"].(int); ok {
 		usrPwr = usrDef
 	}
-	if usrs, ok := pl["users"].(map[string]int); ok {
-		if pwr := usrs[userID]; pwr != 0 {
+	if usrs, ok := pls["users"].(map[string]int); ok {
+		if pwr, ok := usrs[userID]; ok {
 			usrPwr = pwr
 		}
 	}
 
-	if usrPwr >= min {
-		return true
-	}
-
-	return false
+	bp, kp, rp := modPower(pls["ban"]), modPower(pls["kick"]), modPower(pls["redact"])
+	return usrPwr >= minInt(kp, bp, rp)
 }
 
 // secret
@@ -80,16 +76,16 @@ func (f *Fallacy) spiteTech(body, roomID string) {
 // allowed to send messages, first by the `events_default` key and then the
 // `m.room.message` key of `events`.
 func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
-	c, err := f.Client.LookUpStateEvent("m.room.power_levels", roomID, "")
+	pls, err := f.Client.LookUpStateEvent("m.room.power_levels", roomID, "")
 	if err == nil {
-		if !f.userCanMute(c, senderID) {
+		if !f.userCanMute(pls, senderID) {
 			return errors.New("user not authorized to mute")
 		}
-		level := getMessageLevel(c)
-		if u, ok := c["users"].(map[string]int); ok {
+		level := getMessageLevel(pls)
+		if u, ok := pls["users"].(map[string]int); ok { // figure out how to add it ourselves when it doesn't exist
 			u[targetID] = level - 1
 		}
-		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", c)
+		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", pls)
 	}
 
 	return
@@ -100,16 +96,16 @@ func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 // allowed to send messages, first by the `events_default` key and then the
 // `m.room.message` key of `events`.
 func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
-	c, err := f.Client.LookUpStateEvent("m.room.power_levels", roomID, "")
+	pls, err := f.Client.LookUpStateEvent("m.room.power_levels", roomID, "")
 	if err == nil {
-		if !f.userCanMute(c, senderID) {
+		if !f.userCanMute(pls, senderID) {
 			return errors.New("user not authorized to unmute")
 		}
-		level := getMessageLevel(c)
-		if u, ok := c["users"].(map[string]int); ok {
+		level := getMessageLevel(pls)
+		if u, ok := pls["users"].(map[string]int); ok {
 			u[targetID] = level + 1
 		}
-		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", c)
+		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", pls)
 	}
 
 	return
@@ -122,7 +118,6 @@ func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
 	if err != nil {
 		return err
 	}
-
 	if resp.End == "" {
 		return nil // no more messages
 	}
