@@ -26,11 +26,20 @@ func isDisplayOrAvatar(ev *gomatrix.Event) bool {
 
 // WelcomeMember: welcome a member via their display name or mxid
 func (f *Fallacy) WelcomeMember(displayName, sender, roomID string) (err error) {
-	name := sender
+	nickname := sender
 	if displayName != " " {
-		name = displayName
+		nickname = displayName
 	}
-	m := strings.Join([]string{"Welcome", name + "!", "Howdy?"}, " ")
-	_, err = f.Client.SendNotice(roomID, m)
+	anc := strings.Join([]string{"<a href='https://matrix.to/#/", sender, "'>", nickname, "</a>"}, "")
+
+	plain := strings.Join([]string{"Welcome", nickname + "!", "Howdy?"}, " ")
+	format := strings.Join([]string{"Welcome", anc + "!", "Howdy?"}, " ")
+
+	_, err = f.Client.SendMessageEvent(roomID, "m.room.message", gomatrix.TextMessage{
+		Body:          plain,
+		MsgType:       "m.notice",
+		FormattedBody: format,
+		Format:        "org.matrix.custom.html",
+	})
 	return
 }
