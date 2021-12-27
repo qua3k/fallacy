@@ -13,25 +13,21 @@ import (
 )
 
 // modPower: the default mod power for many matrix events
-func modPower(event interface{}) (level int) {
-	var ok bool
-	if level, ok = event.(int); !ok {
-		level = 50
+func modPower(event int) int {
+	if event == 0 {
+		return 50
 	}
-	return
+	return event
 }
 
 // getMessageLevel: returns the level users are required to have to send
 // messages.
-func getMessageLevel(content map[string]interface{}) (level int) {
-	if d, ok := content["events_default"].(int); ok {
-		level = d
+func getMessageLevel(pwr *gomatrix.RespPowerLevels) (level int) {
+	if ed := pwr.EventsDefault; ed != 0 {
+		level = ed
 	}
-
-	if pls, ok := content["events"].(map[string]int); ok {
-		if m, ok := pls["m.room.message"]; ok {
-			level = m
-		}
+	if m, ok := pwr.Events["m.room.mesage"]; ok {
+		level = m
 	}
 	return
 }
@@ -49,18 +45,17 @@ func minInt(i ...int) (m int) {
 
 // userCanMute: determine if the user is allowed to mute someone by checking
 // ban/kick/redact permissions
-func (f *Fallacy) userCanMute(pls map[string]interface{}, userID string) bool {
+func (f *Fallacy) userCanMute(pls *gomatrix.RespPowerLevels, userID string) bool {
 	var usrPwr int
-	if usrDef, ok := pls["users_default"].(int); ok {
-		usrPwr = usrDef
+
+	if d := pls.UsersDefault; d != 0 {
+		usrPwr = d
 	}
-	if usrs, ok := pls["users"].(map[string]int); ok {
-		if pwr, ok := usrs[userID]; ok {
-			usrPwr = pwr
-		}
+	if p := pls.Users[userID]; p != 0 {
+		usrPwr = p
 	}
 
-	bp, kp, rp := modPower(pls["ban"]), modPower(pls["kick"]), modPower(pls["redact"])
+	bp, kp, rp := modPower(pls.Ban), modPower(pls.Kick), modPower(pls.Redact) // what if the power level is 0?
 	return usrPwr >= minInt(kp, bp, rp)
 }
 
@@ -76,18 +71,15 @@ func (f *Fallacy) spiteTech(body, roomID string) {
 // allowed to send messages, first by the `events_default` key and then the
 // `m.room.message` key of `events`.
 func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
-	pls, err := f.Client.LookUpStateEvent("m.room.power_levels", roomID, "")
+	pwr, err := f.Client.PowerLevels(roomID)
 	if err == nil {
-		if !f.userCanMute(pls, senderID) {
+		if !f.userCanMute(pwr, senderID) {
 			return errors.New("user not authorized to mute")
 		}
-		level := getMessageLevel(pls)
-		if u, ok := pls["users"].(map[string]int); ok { // figure out how to add it ourselves when it doesn't exist
-			u[targetID] = level - 1
-		}
-		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", pls)
+		level := getMessageLevel(pwr)
+		pwr.Users[targetID] = level - 1
+		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", *pwr)
 	}
-
 	return
 }
 
@@ -96,18 +88,15 @@ func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 // allowed to send messages, first by the `events_default` key and then the
 // `m.room.message` key of `events`.
 func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
-	pls, err := f.Client.LookUpStateEvent("m.room.power_levels", roomID, "")
+	pwr, err := f.Client.PowerLevels(roomID)
 	if err == nil {
-		if !f.userCanMute(pls, senderID) {
-			return errors.New("user not authorized to unmute")
+		if !f.userCanMute(pwr, senderID) {
+			return errors.New("user not authorized to mute")
 		}
-		level := getMessageLevel(pls)
-		if u, ok := pls["users"].(map[string]int); ok {
-			u[targetID] = level + 1
-		}
-		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", pls)
+		level := getMessageLevel(pwr)
+		pwr.Users[targetID] = level + 1
+		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", *pwr)
 	}
-
 	return
 }
 
