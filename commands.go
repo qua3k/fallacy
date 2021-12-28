@@ -12,7 +12,7 @@ import (
 	"github.com/qua3k/gomatrix"
 )
 
-// modPower: the default mod power for many matrix events
+// modPower returns the default mod power for many matrix events
 func modPower(event int) int {
 	if event == 0 {
 		return 50
@@ -20,10 +20,11 @@ func modPower(event int) int {
 	return event
 }
 
-// getMessageLevel: returns the level users are required to have to send
-// messages.
+// getMessageLevel returns the level users are required to have to send by
+// checking both the `events_default` key and the `m.room.message` key of
+// the `events` object
 func getMessageLevel(pwr *gomatrix.RespPowerLevels) (level int) {
-	if ed := pwr.EventsDefault; ed != 0 {
+	if ed := pwr.EventsDefault; ed != 0 { // `events_default` defaults to zero
 		level = ed
 	}
 	if m, ok := pwr.Events["m.room.mesage"]; ok {
@@ -32,7 +33,7 @@ func getMessageLevel(pwr *gomatrix.RespPowerLevels) (level int) {
 	return
 }
 
-// minInt: variadic function to find min of integers
+// minInt is a variadic function to find the minimum of integers
 func minInt(i ...int) (m int) {
 	m = i[0]
 	for _, v := range i {
@@ -43,64 +44,67 @@ func minInt(i ...int) (m int) {
 	return
 }
 
-// userCanMute: determine if the user is allowed to mute someone by checking
-// ban/kick/redact permissions
-func (f *Fallacy) userCanMute(pls *gomatrix.RespPowerLevels, userID string) bool {
+// spiteTech sends a sticker into the room if the body contains the word "firefox".
+func (f *Fallacy) spiteTech(body, roomID string) (err error) {
+	if strings.Contains(body, "firefox") {
+		_, err = f.Client.SendSticker(roomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
+	}
+	return
+}
+
+// userCanMute determines if the specified user has the necessary permissions
+// to mute another user in the room by checking kick/ban/redact power levels.
+func (f *Fallacy) userCanMute(pwr *gomatrix.RespPowerLevels, userID string) bool {
 	var usrPwr int
 
-	if d := pls.UsersDefault; d != 0 {
+	if d := pwr.UsersDefault; d != 0 {
 		usrPwr = d
 	}
-	if p := pls.Users[userID]; p != 0 {
+	if p := pwr.Users[userID]; p != 0 {
 		usrPwr = p
 	}
 
-	bp, kp, rp := modPower(pls.Ban), modPower(pls.Kick), modPower(pls.Redact) // what if the power level is 0?
+	bp, kp, rp := modPower(pwr.Ban), modPower(pwr.Kick), modPower(pwr.Redact) // what if the power level is 0?
 	return usrPwr >= minInt(kp, bp, rp)
 }
 
-// secret
-func (f *Fallacy) spiteTech(body, roomID string) {
-	if strings.Contains(body, "firefox") {
-		f.Client.SendSticker(roomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
-	}
-}
-
-// Mutes a user in a specific room with their MXID.
-// It fetches a power levels event, then searches for the power level members are
-// allowed to send messages, first by the `events_default` key and then the
-// `m.room.message` key of `events`.
+// MuteUser mutes a targer user in a specified room.
 func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 	pwr, err := f.Client.PowerLevels(roomID)
 	if err == nil {
 		if !f.userCanMute(pwr, senderID) {
 			return errors.New("user not authorized to mute")
 		}
-		level := getMessageLevel(pwr)
-		pwr.Users[targetID] = level - 1
+		level := getMessageLevel(pwr) - 1
+		if level == pwr.EventsDefault {
+			delete(pwr.Users, targetID)
+		} else {
+			pwr.Users[targetID] = level
+		}
 		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", *pwr)
 	}
 	return
 }
 
-// Unmutes a user in a specific room with their MXID.
-// It fetches a power levels event, then searches for the power level members are
-// allowed to send messages, first by the `events_default` key and then the
-// `m.room.message` key of `events`.
+// UnmuteUser unmutes a targer user in a specified room.
 func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
 	pwr, err := f.Client.PowerLevels(roomID)
 	if err == nil {
 		if !f.userCanMute(pwr, senderID) {
 			return errors.New("user not authorized to mute")
 		}
-		level := getMessageLevel(pwr)
-		pwr.Users[targetID] = level + 1
+		level := getMessageLevel(pwr) + 1
+		if level == pwr.EventsDefault {
+			delete(pwr.Users, targetID)
+		} else {
+			pwr.Users[targetID] = level
+		}
 		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", *pwr)
 	}
 	return
 }
 
-// PurgeMessages: redact a number of room events in a room, optionally ending at
+// PurgeMessages redacts a number of room events in a room, optionally ending at
 // a specific message.
 func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
 	resp, err := f.Client.Messages(roomID, "", "", end, 'b', limit)
