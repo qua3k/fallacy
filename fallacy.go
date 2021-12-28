@@ -86,13 +86,14 @@ func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
 // HandleMessage handles m.room.message events
 func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 	b, _ := ev.Body() // body is required
-	if !strings.HasPrefix(b, "!"+f.Config.Name) {
-		return
-	}
 
 	if f.Config.Firefox && strings.Contains(b, "firefox") {
 		_, err := f.Client.SendSticker(ev.RoomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
 		log.Println("sending sticker failed with error: ", err)
+		return
+	}
+
+	if !strings.HasPrefix(b, "!"+f.Config.Name) {
 		return
 	}
 
