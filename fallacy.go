@@ -103,6 +103,7 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 	s := strings.Fields(b)
 	if len(s) < 3 {
 		f.printHelp(ev.RoomID)
+		return
 	}
 
 	switch s[1] {
