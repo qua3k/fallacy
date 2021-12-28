@@ -10,8 +10,8 @@ import (
 	"github.com/qua3k/gomatrix"
 )
 
-// IsDisplayNameOrAvatar: check if a membership event is a display name/avatar
-// change
+// IsDisplayNameOrAvatar checks if a membership event is a display name or
+// avatar change.
 func isDisplayOrAvatar(ev *gomatrix.Event) bool {
 	m := ev.Content["membership"].(string) // `membership` key is required
 	if u := ev.Unsigned["prev_content"].(map[string]interface{}); u != nil {
@@ -22,16 +22,22 @@ func isDisplayOrAvatar(ev *gomatrix.Event) bool {
 	return false
 }
 
-// WelcomeMember: welcome a member via their display name or mxid
+// WelcomeMember welcomes a member via their display name. The display name is
+// calculated as per
+// https://spec.matrix.org/v1.1/client-server-api/#calculating-the-display-name-for-a-user.
 func (f *Fallacy) WelcomeMember(displayName, sender, roomID string) (err error) {
-	nickname := sender
-	if displayName != " " {
-		nickname = displayName
+	if displayName == " " {
+		displayName = sender
 	}
-	anc := strings.Join([]string{"<a href='https://matrix.to/#/", sender, "'>", nickname, "</a>"}, "")
 
-	plain := strings.Join([]string{"Welcome", nickname + "!", "Howdy?"}, " ")
-	format := strings.Join([]string{"Welcome", anc + "!", "Howdy?"}, " ")
+	welcome := func(s string) string {
+		return strings.Join([]string{"Welcome", s + "!", "Howdy?"}, " ")
+	}
+
+	plain := welcome(displayName)
+
+	anc := strings.Join([]string{"<a href='https://matrix.to/#/", sender, "'>", displayName, "</a>"}, "")
+	format := welcome(anc)
 
 	_, err = f.Client.SendMessageEvent(roomID, "m.room.message", gomatrix.TextMessage{
 		Body:          plain,
