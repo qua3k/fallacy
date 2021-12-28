@@ -14,8 +14,7 @@ import (
 // change
 func isDisplayOrAvatar(ev *gomatrix.Event) bool {
 	m := ev.Content["membership"].(string) // `membership` key is required
-	u := ev.Unsigned["prev_content"].(map[string]interface{})
-	if u != nil {
+	if u := ev.Unsigned["prev_content"].(map[string]interface{}); u != nil {
 		if pm := u["membership"].(string); m == "join" && pm == "join" { // `membership` key is required
 			return true
 		}
