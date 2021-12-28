@@ -33,7 +33,7 @@ type Fallacy struct {
 	Config Config
 }
 
-// NewConfig instantiates a new Config struct
+// NewConfig instantiates a new Config struct.
 func NewConfig(firefox bool, name string, welcome bool) Config {
 	return Config{
 		Firefox: firefox,
@@ -42,7 +42,7 @@ func NewConfig(firefox bool, name string, welcome bool) Config {
 	}
 }
 
-// NewFallacy instantiates a new Fallacy struct
+// NewFallacy instantiates a new Fallacy struct.
 func NewFallacy(homeserverURL, userID, accessToken string, config Config) (Fallacy, error) {
 	cli, err := gomatrix.NewClient(homeserverURL, userID, accessToken)
 	if err != nil {
@@ -55,21 +55,31 @@ func NewFallacy(homeserverURL, userID, accessToken string, config Config) (Falla
 	}, nil
 }
 
-// printHelp sends the help message into a room
+// printHelp sends the help message into a room.
 func (f *Fallacy) printHelp(roomID string) {
 	f.Client.SendNotice(roomID, usage)
 }
 
+// HandleUserPolicy handles `m.policy.rule.user` events`.
+func (f *Fallacy) HandleUserPolicy(ev *gomatrix.Event) {
+	r := ev.Content["recommendation"].(string) // required
+	switch r {
+	case "m.ban":
+	case "org.matrix.mjolnir.ban":
+		f.BanUserGlobAll(ev.Content["entity"].(string))
+	}
+}
+
 // HandleMember handles `m.room.member` events
 func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
-	send, room := ev.Sender, ev.RoomID
+	sender, room := ev.Sender, ev.RoomID
 	display, ok := ev.Content["displayname"].(string)
 	if !ok {
-		display = send
+		display = sender
 	}
 
 	if f.Config.Welcome && !isDisplayOrAvatar(ev) {
-		f.WelcomeMember(display, send, room)
+		f.WelcomeMember(display, sender, room)
 	}
 }
 
