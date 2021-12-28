@@ -82,7 +82,7 @@ func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 		} else {
 			pwr.Users[targetID] = level
 		}
-		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", *pwr)
+		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", pwr)
 	}
 	return
 }
@@ -100,7 +100,7 @@ func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
 		} else {
 			pwr.Users[targetID] = level
 		}
-		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", *pwr)
+		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", pwr)
 	}
 	return
 }
