@@ -57,12 +57,13 @@ func (f *Fallacy) spiteTech(body, roomID string) (err error) {
 func (f *Fallacy) userCanMute(pwr *gomatrix.RespPowerLevels, userID string) bool {
 	var usrPwr int
 
-	if d := pwr.UsersDefault; d != 0 {
-		usrPwr = d
+	cp := func(i int) {
+		if i != 0 {
+			usrPwr = i
+		}
 	}
-	if p := pwr.Users[userID]; p != 0 {
-		usrPwr = p
-	}
+	cp(pwr.UsersDefault)
+	cp(pwr.Users[userID])
 
 	bp, kp, rp := modPower(pwr.Ban), modPower(pwr.Kick), modPower(pwr.Redact) // what if the power level is 0?
 	return usrPwr >= minInt(kp, bp, rp)
