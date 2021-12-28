@@ -60,7 +60,7 @@ func (f *Fallacy) userCanMute(pwr *gomatrix.RespPowerLevels, userID string) bool
 	return usrPwr >= minInt(kp, bp, rp)
 }
 
-// MuteUser mutes a targer user in a specified room.
+// MuteUser mutes a target user in a specified room.
 func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 	pwr, err := f.Client.PowerLevels(roomID)
 	if err == nil {
@@ -68,7 +68,9 @@ func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 			return errors.New("user not authorized to mute")
 		}
 		level := getMessageLevel(pwr) - 1
-		if level == pwr.EventsDefault {
+		if pwr.Users[targetID] < level {
+			return errors.New("cannot mute a user that is already muted")
+		} else if level == pwr.EventsDefault {
 			delete(pwr.Users, targetID)
 		} else {
 			pwr.Users[targetID] = level
@@ -78,15 +80,18 @@ func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 	return
 }
 
-// UnmuteUser unmutes a targer user in a specified room.
+// UnmuteUser unmutes a target user in a specified room.
 func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
 	pwr, err := f.Client.PowerLevels(roomID)
 	if err == nil {
 		if !f.userCanMute(pwr, senderID) {
 			return errors.New("user not authorized to mute")
 		}
-		level := getMessageLevel(pwr) + 1
-		if level == pwr.EventsDefault {
+		level := getMessageLevel(pwr)
+		if pwr.Users[targetID] >= level {
+			log.Println("working!")
+			return errors.New("cannot unmute a user that is already unmuted")
+		} else if level == pwr.EventsDefault {
 			delete(pwr.Users, targetID)
 		} else {
 			pwr.Users[targetID] = level
