@@ -90,8 +90,9 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 		return
 	}
 
-	if f.Config.Firefox {
-		f.spiteTech(b, ev.RoomID)
+	if f.Config.Firefox && strings.Contains(b, "firefox") {
+		_, err := f.Client.SendSticker(ev.RoomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
+		log.Println("sending sticker failed with error: ", err)
 		return
 	}
 

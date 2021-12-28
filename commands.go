@@ -7,7 +7,6 @@ package fallacy
 import (
 	"errors"
 	"log"
-	"strings"
 
 	"github.com/qua3k/gomatrix"
 )
@@ -40,14 +39,6 @@ func minInt(i ...int) (m int) {
 		if v < m {
 			m = v
 		}
-	}
-	return
-}
-
-// spiteTech sends a sticker into the room if the body contains the word "firefox".
-func (f *Fallacy) spiteTech(body, roomID string) (err error) {
-	if strings.Contains(body, "firefox") {
-		_, err = f.Client.SendSticker(roomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
 	}
 	return
 }
