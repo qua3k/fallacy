@@ -60,6 +60,17 @@ func (f *Fallacy) printHelp(roomID string) {
 	f.Client.SendNotice(roomID, usage)
 }
 
+// spiteTech sends a fallacy sticker if the body text mentions "firefox".
+func (f *Fallacy) spiteTech(body, roomID string) {
+	l := strings.ToLower(body)
+	if strings.Contains(l, "firefox") {
+		_, err := f.Client.SendSticker(roomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
+		if err != nil {
+			log.Println("sending sticker failed with error: ", err)
+		}
+	}
+}
+
 // HandleUserPolicy handles `m.policy.rule.user` events`.
 func (f *Fallacy) HandleUserPolicy(ev *gomatrix.Event) {
 	r := ev.Content["recommendation"].(string) // required
@@ -87,12 +98,8 @@ func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
 func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 	b, _ := ev.Body() // body is required
 
-	lb := strings.ToLower(b)
-	if f.Config.Firefox && strings.Contains(lb, "firefox") {
-		_, err := f.Client.SendSticker(ev.RoomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
-		if err != nil {
-			log.Println("sending sticker failed with error: ", err)
-		}
+	if f.Config.Firefox {
+		f.spiteTech(b, ev.RoomID)
 		return
 	}
 
@@ -108,7 +115,10 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 
 	switch s[1] {
 	case "mute":
-		f.MuteUser(ev.RoomID, ev.Sender, s[2])
+		if err := f.MuteUser(ev.RoomID, ev.Sender, s[2]); err != nil {
+			log.Println(err)
+		}
+		return
 	case "purge":
 		l, err := strconv.Atoi(s[2])
 		if err != nil {
@@ -116,8 +126,12 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 			return
 		}
 		f.PurgeMessages(ev.RoomID, "", l)
+		return
 	case "unmute":
-		f.UnmuteUser(ev.RoomID, ev.Sender, s[2])
+		if err := f.UnmuteUser(ev.RoomID, ev.Sender, s[2]); err != nil {
+			log.Println(err)
+		}
+		return
 	}
 
 	// messages := make(chan string)
