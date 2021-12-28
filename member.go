@@ -13,9 +13,10 @@ import (
 // IsDisplayNameOrAvatar checks if a membership event is a display name or
 // avatar change.
 func isDisplayOrAvatar(ev *gomatrix.Event) bool {
-	m := ev.Content["membership"].(string) // `membership` key is required
+	m, s := ev.Content["membership"].(string), ev.Sender // `membership` key is required
 	if u, ok := ev.Unsigned["prev_content"].(map[string]interface{}); ok && u != nil {
-		if pm := u["membership"].(string); m == "join" && pm == "join" { // `membership` key is required
+		pm, ps := u["membership"].(string), u["prev_sender"]
+		if s == ps && m == "join" && pm == "join" { // `membership` key is required
 			return true
 		}
 	}
