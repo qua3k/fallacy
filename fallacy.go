@@ -15,11 +15,11 @@ import (
 	"github.com/qua3k/gomatrix"
 )
 
-const usage = `this is how you use the bot
-to get rid of your enemies: do 'ban [MEMBER] [REASON]'
-to avoid hearing from your friends: do 'mute [MEMBER]'
-to get rid of your shitposts: do 'purge [NUMBER]'
-to welcome new members: do 'welcome [BOOL]'`
+const usage = `this is how you use the bot:
+ban [MEMBER] [REASON]				bans your enemies
+mute [MEMBER]						avoid having to hear your friends
+purge [NUMBER]						gets rid of your shitposts
+welcome [BOOL]						welcomes new members`
 
 type Config struct {
 	Firefox bool   // should we harass firefox users
@@ -33,7 +33,7 @@ type Fallacy struct {
 	Config Config
 }
 
-// NewConfig: instantiates a new Config struct
+// NewConfig instantiates a new Config struct
 func NewConfig(firefox bool, name string, welcome bool) Config {
 	return Config{
 		Firefox: firefox,
@@ -42,7 +42,7 @@ func NewConfig(firefox bool, name string, welcome bool) Config {
 	}
 }
 
-// NewFallacy: instantiates a new Fallacy struct
+// NewFallacy instantiates a new Fallacy struct
 func NewFallacy(homeserverURL, userID, accessToken string, config Config) (Fallacy, error) {
 	cli, err := gomatrix.NewClient(homeserverURL, userID, accessToken)
 	if err != nil {
@@ -55,17 +55,17 @@ func NewFallacy(homeserverURL, userID, accessToken string, config Config) (Falla
 	}, nil
 }
 
-// printHelp: send the help message into a room
+// printHelp sends the help message into a room
 func (f *Fallacy) printHelp(roomID string) {
 	f.Client.SendNotice(roomID, usage)
 }
 
-// HandleMember: Handle `m.room.member` events
+// HandleMember handles `m.room.member` events
 func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
 	send, room := ev.Sender, ev.RoomID
 	display, ok := ev.Content["displayname"].(string)
 	if !ok {
-		display = ev.Sender
+		display = send
 	}
 
 	if f.Config.Welcome && !isDisplayOrAvatar(ev) {
@@ -73,7 +73,7 @@ func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
 	}
 }
 
-// HandleMessage: handle m.room.message events
+// HandleMessage handles m.room.message events
 func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 	b, _ := ev.Body() // body is required
 	if !strings.HasPrefix(b, "!"+f.Config.Name) {
@@ -107,10 +107,12 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 	// messages := make(chan string)
 }
 
-// HandleTombStone: handle m.room.tombstone events
+// HandleTombStone handles m.room.tombstone events
 func (f *Fallacy) HandleTombstone(ev *gomatrix.Event) {
 	r := ev.Content["replacement_room"].(string) // `replacement_room` is required by spec
-	if _, err := f.Client.JoinRoom(r, "", map[string]string{"reason": "following room upgrade"}); err != nil {
+
+	_, err := f.Client.JoinRoom(r, "", map[string]string{"reason": "following room upgrade"})
+	if err != nil {
 		log.Println("attempting to join `replacement_room` failed with error: ", err)
 	}
 }

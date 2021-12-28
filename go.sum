@@ -36,6 +36,8 @@ github.com/qua3k/gomatrix v0.0.0-20211224205429-ea423a4faf63 h1:pMveMh+qv26OBjFW
 github.com/qua3k/gomatrix v0.0.0-20211224205429-ea423a4faf63/go.mod h1:npNoi4T7UFcOgSrjhmB3mwRTmrPNos/9y8EAWu3QNfY=
 github.com/qua3k/gomatrix v0.0.0-20211225195145-763808d3adb8 h1:ZjxKQqT4tAAKzuKH2vkLaYMin5gowh+dTS9M8Vz7GzI=
 github.com/qua3k/gomatrix v0.0.0-20211225195145-763808d3adb8/go.mod h1:npNoi4T7UFcOgSrjhmB3mwRTmrPNos/9y8EAWu3QNfY=
+github.com/qua3k/gomatrix v0.0.0-20211227131001-988a0a8902a8 h1:FNCmtFlLetAAzUUJSjzfsgJjjJle5JqNxciCzADCBV4=
+github.com/qua3k/gomatrix v0.0.0-20211227131001-988a0a8902a8/go.mod h1:npNoi4T7UFcOgSrjhmB3mwRTmrPNos/9y8EAWu3QNfY=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
@@ -73,6 +75,3 @@ gopkg.in/yaml.v2 v2.2.1/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.4.0/go.mod h1:RDklbk79AGWmwhnvt/jBztapEOGDOx6ZbXqjP6csGnQ=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c h1:dUUwHk2QECo/6vqA44rthZ8ie2QXMNeKRTHCNY2nXvo=
 gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-maunium.net/go/maulogger/v2 v2.3.1/go.mod h1:TYWy7wKwz/tIXTpsx8G3mZseIRiC5DoMxSZazOHy68A=
-maunium.net/go/mautrix v0.10.6 h1:hQAoo9mKODQvIGiYZIZfW14GFo0fwEOiMIKrZ72OvGE=
-maunium.net/go/mautrix v0.10.6/go.mod h1:k4Ng5oci83MEbqPL6KOjPdbU7f8v01KlMjR/zTQ+7mA=
