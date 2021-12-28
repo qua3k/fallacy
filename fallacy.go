@@ -87,9 +87,12 @@ func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
 func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 	b, _ := ev.Body() // body is required
 
-	if f.Config.Firefox && strings.Contains(b, "firefox") {
+	lb := strings.ToLower(b)
+	if f.Config.Firefox && strings.Contains(lb, "firefox") {
 		_, err := f.Client.SendSticker(ev.RoomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
-		log.Println("sending sticker failed with error: ", err)
+		if err != nil {
+			log.Println("sending sticker failed with error: ", err)
+		}
 		return
 	}
 
