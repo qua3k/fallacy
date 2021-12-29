@@ -61,14 +61,16 @@ func (f *Fallacy) printHelp(roomID string) {
 }
 
 // spiteTech sends a fallacy sticker if the body text mentions "firefox".
-func (f *Fallacy) spiteTech(body, roomID string) {
+func (f *Fallacy) spiteTech(body, roomID string) bool {
 	l := strings.ToLower(body)
 	if strings.Contains(l, "firefox") {
 		_, err := f.Client.SendSticker(roomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
 		if err != nil {
-			log.Println("sending sticker failed with error: ", err)
+			log.Println("sending sticker failed with error:", err)
 		}
+		return true
 	}
+	return false
 }
 
 // HandleUserPolicy handles `m.policy.rule.user` events`.
@@ -146,6 +148,6 @@ func (f *Fallacy) HandleTombstone(ev *gomatrix.Event) {
 
 	_, err := f.Client.JoinRoom(r, "", map[string]string{"reason": "following room upgrade"})
 	if err != nil {
-		log.Println("attempting to join `replacement_room` failed with error: ", err)
+		log.Println("attempting to join `replacement_room` failed with error:", err)
 	}
 }

@@ -30,7 +30,7 @@ func (f *Fallacy) BanUserGlob(roomID, userGlob string) (err error) {
 					UserID: m,
 				})
 				if err != nil {
-					log.Println("glob banning user failed with: ", err)
+					log.Println("glob banning user failed with:", err)
 				}
 			}
 		}(m)
@@ -49,7 +49,7 @@ func (f *Fallacy) BanUserGlobAll(userGlob string) (err error) {
 	for _, r := range jr.JoinedRooms {
 		go func(r string) { // does this race?
 			if err := f.BanUserGlob(r, userGlob); err != nil {
-				log.Println("attempting to glob ban users failed with: ", err)
+				log.Println("attempting to glob ban users failed with:", err)
 			}
 		}(r)
 	}
