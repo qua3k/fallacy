@@ -15,7 +15,7 @@ func IsNewJoin(ev *gomatrix.Event) bool {
 	m := ev.Content["membership"].(string) // `membership` key is required
 	if m == "join" {
 		if u, ok := ev.Unsigned["prev_content"].(map[string]interface{}); ok && u != nil {
-			if pm := u["membership"].(string); m == "join" && pm == "join" { // `membership` key is required
+			if pm := u["membership"].(string); pm == "join" { // `membership` key is required
 				return false
 			}
 		}
