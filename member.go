@@ -12,10 +12,15 @@ import (
 
 // isNewJoin checks if a membership event is really a new join.
 func isNewJoin(ev *gomatrix.Event) bool {
-	m := ev.Content["membership"].(string) // `membership` key is required
-	if m == "join" {
-		if u, ok := ev.Unsigned["prev_content"].(map[string]interface{}); ok && u != nil {
-			if pm := u["membership"].(string); pm == "join" { // `membership` key is required
+	m, ok := ev.Content["membership"].(string)
+
+	join := func(m string, ok bool) bool {
+		return m == "join" && ok
+	}
+
+	if join(m, ok) { // `membership` key must be string
+		if u, ok := ev.Unsigned["prev_content"].(map[string]interface{}); ok {
+			if pm, ok := u["membership"].(string); join(pm, ok) { // `membership` key must be string
 				return false
 			}
 		}
