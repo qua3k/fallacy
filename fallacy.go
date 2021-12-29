@@ -128,7 +128,7 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 			f.printHelp(ev.RoomID)
 			return
 		}
-		if err := f.PurgeMessages(ev.RoomID, "", int32(l)); err != nil {
+		if err := f.PurgeMessages(ev.RoomID, "", l); err != nil {
 			log.Println(err)
 		}
 		return

@@ -13,6 +13,8 @@ import (
 	"github.com/qua3k/gomatrix"
 )
 
+const MinimumFetch int = 20 // the minimum number of messages to fetch during a request to `/messages`
+
 // modPower returns the default mod power for many matrix events
 func modPower(event int) int {
 	if event == 0 {
@@ -104,28 +106,38 @@ func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
 }
 
 // PurgeMessages redacts a number of room events in a room, optionally ending at
-// a specific message.
-func (f *Fallacy) PurgeMessages(roomID, end string, limit int32) error {
-	resp, err := f.Client.Messages(roomID, "", end, "", 'b', int(limit))
+// a specific message token obtained from a previous request to the endpoint.
+func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
+	fetch := limit
+	if fetch < MinimumFetch {
+		fetch = MinimumFetch // always fetch a minimum amount of messages
+	}
+
+	resp, err := f.Client.Messages(roomID, "", end, "", 'b', fetch)
 	if err != nil {
 		return err
 	}
-	if resp.End == "" {
-		return nil // no more messages
+
+	purged := uint32(limit)
+
+	if limit > len(resp.Chunk) {
+		limit = len(resp.Chunk) // delete all the events we can
 	}
 
 	var wg sync.WaitGroup
-	count := int32(len(resp.Chunk))
-
-	for _, e := range resp.Chunk {
+	for _, e := range resp.Chunk[0:limit] { // slice the necessary elements
 		wg.Add(1)
 		go func(e gomatrix.Event) {
 			defer wg.Done()
 			_, ok := e.Unsigned["redacted_because"].(map[string]interface{})
-			if e.Type == "m.room.redaction" || ok || e.StateKey != nil {
-				atomic.AddInt32(&count, ^int32(0))
+
+			if e.Type == "m.room.redaction" ||
+				e.StateKey != nil ||
+				ok {
+				atomic.AddUint32(&purged, ^uint32(0)) // skip over `m.room.redactions`, redacted events, and state events
 				return
 			}
+
 			if _, err := f.Client.RedactEvent(roomID, e.ID, &gomatrix.ReqRedact{}); err != nil {
 				log.Println(err)
 			}
@@ -133,11 +145,14 @@ func (f *Fallacy) PurgeMessages(roomID, end string, limit int32) error {
 	}
 	wg.Wait()
 
+	if resp.End == "" {
+		return nil // no more messages
+	}
+
 	// Recurse until we reach the end
-	if count < limit {
-		miss := limit - count
-		err := f.PurgeMessages(roomID, resp.End, miss)
-		return err
+	if u := int(purged); u < limit {
+		miss := limit - u
+		return f.PurgeMessages(roomID, resp.End, miss)
 	}
 
 	return nil
