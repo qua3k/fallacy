@@ -10,8 +10,8 @@ import (
 	"github.com/qua3k/gomatrix"
 )
 
-// IsNewJoin checks if a membership event is really a new join.
-func IsNewJoin(ev *gomatrix.Event) bool {
+// isNewJoin checks if a membership event is really a new join.
+func isNewJoin(ev *gomatrix.Event) bool {
 	m := ev.Content["membership"].(string) // `membership` key is required
 	if m == "join" {
 		if u, ok := ev.Unsigned["prev_content"].(map[string]interface{}); ok && u != nil {
