@@ -36,17 +36,6 @@ func getMessageLevel(pwr *gomatrix.RespPowerLevels) (level int) {
 	return
 }
 
-// minInt is a variadic function to find the minimum of integers
-func minInt(i ...int) (m int) {
-	m = i[0]
-	for _, v := range i {
-		if v < m {
-			m = v
-		}
-	}
-	return
-}
-
 // userCanMute determines if the specified user has the necessary permissions
 // to mute another user in the room by checking kick/ban/redact power levels.
 func (f *Fallacy) userCanMute(pwr *gomatrix.RespPowerLevels, userID string) bool {
@@ -59,6 +48,16 @@ func (f *Fallacy) userCanMute(pwr *gomatrix.RespPowerLevels, userID string) bool
 	}
 	cp(pwr.UsersDefault)
 	cp(pwr.Users[userID])
+
+	minInt := func(i ...int) (m int) {
+		m = i[0]
+		for _, v := range i {
+			if v < m {
+				m = v
+			}
+		}
+		return
+	}
 
 	bp, kp, rp := modPower(pwr.Ban), modPower(pwr.Kick), modPower(pwr.Redact) // what if the power level is 0?
 	return usrPwr >= minInt(kp, bp, rp)
