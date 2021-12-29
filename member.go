@@ -10,15 +10,16 @@ import (
 	"github.com/qua3k/gomatrix"
 )
 
-// IsDisplayNameOrAvatar checks if a membership event is a display name or
-// avatar change.
-func isDisplayOrAvatar(ev *gomatrix.Event) bool {
-	m, s := ev.Content["membership"].(string), ev.Sender // `membership` key is required
-	if u, ok := ev.Unsigned["prev_content"].(map[string]interface{}); ok && u != nil {
-		pm, ps := u["membership"].(string), u["prev_sender"]
-		if s == ps && m == "join" && pm == "join" { // `membership` key is required
-			return true
+// IsNewJoin checks if a membership event is really a new join.
+func IsNewJoin(ev *gomatrix.Event) bool {
+	m := ev.Content["membership"].(string) // `membership` key is required
+	if m == "join" {
+		if u, ok := ev.Unsigned["prev_content"].(map[string]interface{}); ok && u != nil {
+			if pm := u["membership"].(string); m == "join" && pm == "join" { // `membership` key is required
+				return false
+			}
 		}
+		return true
 	}
 	return false
 }

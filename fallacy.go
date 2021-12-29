@@ -89,7 +89,7 @@ func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
 		display = sender
 	}
 
-	if f.Config.Welcome && !isDisplayOrAvatar(ev) {
+	if f.Config.Welcome && IsNewJoin(ev) {
 		f.WelcomeMember(display, sender, room)
 	}
 }
