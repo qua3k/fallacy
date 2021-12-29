@@ -5,8 +5,6 @@
 package fallacy
 
 import (
-	"strings"
-
 	"github.com/qua3k/gomatrix"
 )
 
@@ -38,12 +36,11 @@ func (f *Fallacy) WelcomeMember(displayName, sender, roomID string) (err error) 
 	}
 
 	welcome := func(s string) string {
-		return strings.Join([]string{"Welcome", s + "!", "Howdy?"}, " ")
+		return "Welcome " + s + "! Howdy?"
 	}
 
+	anc := "<a href='https://matrix.to/#/" + sender + "'>" + displayName + "</a>"
 	plain := welcome(displayName)
-
-	anc := strings.Join([]string{"<a href='https://matrix.to/#/", sender, "'>", displayName, "</a>"}, "")
 	format := welcome(anc)
 
 	_, err = f.Client.SendMessageEvent(roomID, "m.room.message", gomatrix.TextMessage{
