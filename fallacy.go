@@ -75,7 +75,11 @@ func (f *Fallacy) spiteTech(body, roomID string) bool {
 
 // HandleUserPolicy handles `m.policy.rule.user` events`.
 func (f *Fallacy) HandleUserPolicy(ev *gomatrix.Event) {
-	r := ev.Content["recommendation"].(string) // required
+	r, ok := ev.Content["recommendation"].(string)
+	if !ok {
+		log.Println("type assert failed when asserting `recommendation` key, not a string")
+		return
+	}
 	switch r {
 	case "m.ban":
 	case "org.matrix.mjolnir.ban":
