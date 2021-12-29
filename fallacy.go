@@ -125,7 +125,9 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 			f.printHelp(ev.RoomID)
 			return
 		}
-		f.PurgeMessages(ev.RoomID, "", l)
+		if err := f.PurgeMessages(ev.RoomID, "", int32(l)); err != nil {
+			log.Println(err)
+		}
 		return
 	case "unmute":
 		if err := f.UnmuteUser(ev.RoomID, ev.Sender, s[2]); err != nil {

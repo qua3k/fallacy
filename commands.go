@@ -7,6 +7,8 @@ package fallacy
 import (
 	"errors"
 	"log"
+	"sync"
+	"sync/atomic"
 
 	"github.com/qua3k/gomatrix"
 )
@@ -103,8 +105,8 @@ func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
 
 // PurgeMessages redacts a number of room events in a room, optionally ending at
 // a specific message.
-func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
-	resp, err := f.Client.Messages(roomID, "", "", end, 'b', limit)
+func (f *Fallacy) PurgeMessages(roomID, end string, limit int32) error {
+	resp, err := f.Client.Messages(roomID, "", end, "", 'b', int(limit))
 	if err != nil {
 		return err
 	}
@@ -112,21 +114,30 @@ func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
 		return nil // no more messages
 	}
 
+	var wg sync.WaitGroup
+	count := int32(len(resp.Chunk))
+
 	for _, e := range resp.Chunk {
-		// TODO: figure out if this races
+		wg.Add(1)
 		go func(e gomatrix.Event) {
+			defer wg.Done()
+			_, ok := e.Unsigned["redacted_because"].(map[string]interface{})
+			if e.Type == "m.room.redaction" || ok || e.StateKey != nil {
+				atomic.AddInt32(&count, ^int32(0))
+				return
+			}
 			if _, err := f.Client.RedactEvent(roomID, e.ID, &gomatrix.ReqRedact{}); err != nil {
 				log.Println(err)
 			}
 		}(e)
 	}
+	wg.Wait()
 
 	// Recurse until we reach the end
-	if count := len(resp.Chunk); count < limit {
+	if count < limit {
 		miss := limit - count
-		if err := f.PurgeMessages(roomID, resp.Start, miss); err != nil {
-			return err
-		}
+		err := f.PurgeMessages(roomID, resp.End, miss)
+		return err
 	}
 
 	return nil
