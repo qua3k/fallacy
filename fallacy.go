@@ -99,8 +99,9 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 	b, _ := ev.Body() // body is required
 
 	if f.Config.Firefox {
-		f.spiteTech(b, ev.RoomID)
-		return
+		if d := f.spiteTech(b, ev.RoomID); d {
+			return
+		}
 	}
 
 	if !strings.HasPrefix(b, "!"+f.Config.Name) {
