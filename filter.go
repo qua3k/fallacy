@@ -5,33 +5,38 @@
 package fallacy
 
 import (
-	"encoding/json"
-
-	"github.com/qua3k/gomatrix"
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
 )
 
-func (f *Fallacy) setupPurgeFilter() string {
-	filter := gomatrix.FilterPart{
+// setupPurgeFilter returns a RoomEventFilter adequate for fetching the events
+// necessary to purge messages.
+func setupPurgeFilter() mautrix.FilterPart {
+	return mautrix.FilterPart{
 		LazyLoadMembers: true,
-		NotTypes: []string{
-			"m.room.create",
-			"m.room.history_visibility",
-			"m.room.join_rules",
-			"m.room.member",
-			"m.room.power_levels",
-			"m.room.avatar",
-			"m.room.name",
-			"m.room.pinned_events",
-			"m.room.topic",
-			"m.room.retention",
-			"m.room.tombstone",
+		NotTypes: []event.Type{
+			event.EventRedaction,
+			// avoid fetching state events
+			event.StateAliases,
+			event.StateBridge,
+			event.StateCanonicalAlias,
+			event.StateCreate,
+			event.StateEncryption,
+			event.StateHalfShotBridge,
+			event.StateHistoryVisibility,
+			event.StateJoinRules,
+			event.StateMember,
+			event.StatePinnedEvents,
+			event.StatePowerLevels,
+			event.StateRoomAvatar,
+			event.StateRoomName,
+			event.StateSpaceChild,
+			event.StateTombstone,
+			event.StateTopic,
 		},
 	}
-
-	filterJSON, err := json.Marshal(filter)
-	if err != nil {
-		panic(err)
-	}
-
-	return string(filterJSON)
 }
+
+// setupPurgeFilter returns a Filter adequate for fetching the events
+// necessary to purge messages.
+func setupSyncFilter() {}

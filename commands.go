@@ -10,23 +10,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/qua3k/gomatrix"
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 // MinimumFetch is the minimum number of messages to fetch during a request to `/messages`.
 const MinimumFetch int = 20
-
-var (
-	PurgeFilter     string
-	purgeFilterOnce sync.Once
-)
-
-func (f *Fallacy) InitPurgeFilter() string {
-	purgeFilterOnce.Do(func() {
-		PurgeFilter = f.setupPurgeFilter()
-	})
-	return PurgeFilter
-}
 
 /* type Command struct{
 	listeners map[string]listener
@@ -38,39 +28,22 @@ func (c *Command) Register(keyword string) {
 
 } */
 
-// modPower returns the default mod power for many matrix events.
-func modPower(event int) int {
-	if event == 0 {
-		return 50
-	}
-	return event
-}
-
-// getMessageLevel returns the level users are required to have to send by
-// checking both the `events_default` key and the `m.room.message` key of
-// the `events` object.
-func getMessageLevel(pwr *gomatrix.RespPowerLevels) (level int) {
-	if ed := pwr.EventsDefault; ed != 0 { // `events_default` defaults to zero
-		level = ed
-	}
-	if m, ok := pwr.Events["m.room.mesage"]; ok {
-		level = m
-	}
+// powerLevels returns a power levels struct.
+func (f *Fallacy) powerLevels(roomID id.RoomID) (resp *event.PowerLevelsEventContent, err error) {
+	err = f.Client.StateEvent(roomID, event.StatePowerLevels, "", &resp)
 	return
 }
 
-// userCanMute determines if the specified user has the necessary permissions
-// to mute another user in the room by checking kick/ban/redact power levels.
-func (f *Fallacy) userCanMute(pwr *gomatrix.RespPowerLevels, userID string) bool {
-	var usrPwr int
-
-	cp := func(i int) {
-		if i != 0 {
-			usrPwr = i
-		}
+// isAdmin returns whether the user is a room admin by checking ban/kick/redact
+// power levels.
+func (f *Fallacy) isAdmin(roomID id.RoomID, userID id.UserID) bool {
+	pl, err := f.powerLevels(roomID)
+	if err != nil {
+		log.Println("fetching power levels event failed!")
+		return false
 	}
-	cp(pwr.UsersDefault)
-	cp(pwr.Users[userID])
+
+	bp, kp, rp := pl.Ban(), pl.Kick(), pl.Redact()
 
 	minInt := func(i ...int) (m int) {
 		m = i[0]
@@ -82,92 +55,86 @@ func (f *Fallacy) userCanMute(pwr *gomatrix.RespPowerLevels, userID string) bool
 		return
 	}
 
-	bp, kp, rp := modPower(pwr.Ban), modPower(pwr.Kick), modPower(pwr.Redact) // what if the power level is 0?
-	return usrPwr >= minInt(kp, bp, rp)
+	return pl.GetUserLevel(userID) >= minInt(bp, kp, rp)
 }
 
-/* func (f *Fallacy) userCanRedact() {
-
-}
-*/
-// MuteUser mutes a target user in a specified room.
-func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
-	pwr, err := f.Client.PowerLevels(roomID)
-	if err == nil {
-		if !f.userCanMute(pwr, senderID) {
-			return errors.New("user not authorized to mute")
-		}
-		level := getMessageLevel(pwr) - 1
-		if pwr.Users[targetID] < level {
-			return errors.New("cannot mute a user that is already muted")
-		} else if level == pwr.EventsDefault {
-			delete(pwr.Users, targetID)
-		} else {
-			pwr.Users[targetID] = level
-		}
-		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", pwr)
+// MuteUser mutes a target user in a specified room by utilizing power levels.
+func (f *Fallacy) MuteUser(roomID id.RoomID, senderID, targetID id.UserID) (err error) {
+	pwr, err := f.powerLevels(roomID)
+	if err != nil {
+		return
 	}
+	level := pwr.GetEventLevel(event.EventMessage)
+	if pwr.GetUserLevel(targetID) <= level-1 {
+		return errors.New("cannot mute a user that is already muted")
+	}
+	pwr.SetUserLevel(targetID, level)
+	_, err = f.Client.SendStateEvent(roomID, event.StatePowerLevels, "", pwr)
 	return
 }
 
-// UnmuteUser unmutes a target user in a specified room.
-func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
-	pwr, err := f.Client.PowerLevels(roomID)
-	if err == nil {
-		if !f.userCanMute(pwr, senderID) {
-			return errors.New("user not authorized to mute")
-		}
-		level := getMessageLevel(pwr)
-		if pwr.Users[targetID] >= level {
-			return errors.New("cannot unmute a user that is already unmuted")
-		} else if level == pwr.EventsDefault {
-			delete(pwr.Users, targetID)
-		} else {
-			pwr.Users[targetID] = level
-		}
-		_, err = f.Client.SendStateEvent(roomID, "m.room.power_levels", "", pwr)
+// UnmuteUser unmutes a target user in a specified room by utilizing power levels.
+func (f *Fallacy) UnmuteUser(roomID id.RoomID, senderID, targetID id.UserID) (err error) {
+	pwr, err := f.powerLevels(roomID)
+	if err != nil {
+		return
 	}
+	level := pwr.GetEventLevel(event.EventMessage)
+	if pwr.GetUserLevel(targetID) >= level {
+		return errors.New("cannot unmute a user that is not muted")
+	}
+	pwr.SetUserLevel(targetID, level)
+	_, err = f.Client.SendStateEvent(roomID, event.StatePowerLevels, "", pwr)
 	return
 }
 
 // PurgeMessages redacts a number of room events in a room, optionally ending at
-// a specific message token obtained from a previous request to the endpoint.
-func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
-	fetch := limit
-	if fetch < MinimumFetch {
-		fetch = MinimumFetch
+// a specific pagination token obtained from a previous request to the endpoint.
+//
+// Alternative solutions were evaluated such as deleting all messages starting
+// from a message that was replied to the newest message à la Telegram's
+// SophieBot but they were determined to be infeasible as calculating the
+// pagination tokens were specific to Synapse and not exposed through the
+// client-server API.
+func (f *Fallacy) PurgeMessages(roomID id.RoomID, end string, limit int) error {
+	var (
+		fetchNum    int    = limit
+		purgedCount uint32 = uint32(limit)
+		wg          sync.WaitGroup
+	)
+
+	if limit <= 0 {
+		return errors.New("nothing to purge...")
 	}
 
-	filter := f.setupPurgeFilter()
-	resp, err := f.Client.Messages(roomID, filter, end, "", 'b', fetch)
+	if fetchNum < MinimumFetch {
+		fetchNum = MinimumFetch // fetchNum must never be less than MinimumFetch
+	}
+
+	resp, err := f.Client.Messages(roomID, end, "", 'b', fetchNum)
 	if err != nil {
 		return err
 	}
 
-	purged := uint32(limit)
-
-	if limit > len(resp.Chunk) {
-		limit = len(resp.Chunk) // delete all the events we can
+	chunkSize := len(resp.Chunk)
+	if limit < chunkSize {
+		chunkSize = limit // we may fetch more events than we actually need
 	}
 
-	var wg sync.WaitGroup
-	for _, e := range resp.Chunk[0:limit] { // slice the necessary elements
+	for _, e := range resp.Chunk[0:chunkSize] {
 		wg.Add(1)
-		go func(e gomatrix.Event) {
+		go func(e event.Event) { // check for races
 			defer wg.Done()
-			_, ok := e.Unsigned["redacted_because"].(map[string]interface{})
-
-			if e.Type == "m.room.redaction" ||
+			if e.Type == event.EventRedaction ||
 				e.StateKey != nil ||
-				ok {
-				atomic.AddUint32(&purged, ^uint32(0)) // skip over `m.room.redactions`, redacted events, and state events
+				e.Unsigned.RedactedBecause != nil {
+				atomic.AddUint32(&purgedCount, ^uint32(0))
 				return
 			}
-
-			if _, err := f.Client.RedactEvent(roomID, e.ID, &gomatrix.ReqRedact{}); err != nil {
+			if _, err := f.Client.RedactEvent(roomID, e.ID, mautrix.ReqRedact{}); err != nil {
 				log.Println(err)
 			}
-		}(e)
+		}(*e)
 	}
 	wg.Wait()
 
@@ -176,7 +143,7 @@ func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
 	}
 
 	// Recurse until we reach the end
-	if u := int(purged); u < limit {
+	if u := int(purgedCount); u < limit {
 		miss := limit - u
 		return f.PurgeMessages(roomID, resp.End, miss)
 	}

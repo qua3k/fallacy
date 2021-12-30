@@ -6,52 +6,67 @@ package fallacy
 
 import (
 	"log"
+	"sync"
 
 	"github.com/gobwas/glob"
-	"github.com/qua3k/gomatrix"
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/id"
 )
 
-// BanUserGlob bans users with the power of glob.
-func (f *Fallacy) BanUserGlob(roomID, userGlob string) (err error) {
+// GlobBan bans a single user from the room with the power of glob.
+func (f *Fallacy) GlobBan(glob glob.Glob, roomID id.RoomID, userID id.UserID) (err error) {
+	if glob.Match(string(userID)) {
+		_, err = f.Client.BanUser(roomID, &mautrix.ReqBanUser{
+			Reason: "u jus got glob ban",
+			UserID: userID,
+		})
+	}
+	return
+}
+
+// GlobBanRoom utilizes the power of glob to ban all users matching the glob
+// from the room.
+func (f *Fallacy) GlobBanRoom(glob glob.Glob, roomID id.RoomID) (err error) {
+	jm, err := f.Client.JoinedMembers(roomID)
+	if err != nil {
+		return
+	}
+
+	var wg sync.WaitGroup
+	for u := range jm.Joined {
+		wg.Add(1)
+		go func(u id.UserID) {
+			defer wg.Done()
+			if err := f.GlobBan(glob, roomID, u); err != nil {
+				log.Println(err)
+			}
+		}(u)
+	}
+	wg.Wait()
+	return
+}
+
+// GlobBanAll uses glob to ban users from all rooms the client is joined to.
+func (f *Fallacy) GlobBanAll(userGlob string) (err error) {
+	jr, err := f.Client.JoinedRooms()
+	if err != nil {
+		return
+	}
+
 	g, err := glob.Compile(userGlob)
 	if err != nil {
 		return
 	}
 
-	jm, err := f.Client.JoinedMembers(roomID)
-	if err != nil {
-		return
-	}
-	for m := range jm.Joined {
-		go func(m string) { // does this race?
-			if g.Match(m) {
-				_, err := f.Client.BanUser(m, &gomatrix.ReqBanUser{
-					Reason: "u jus got glob ban",
-					UserID: m,
-				})
-				if err != nil {
-					log.Println("glob banning user failed with:", err)
-				}
-			}
-		}(m)
-	}
-	return
-}
-
-// BanUserGlobAll bans user with the power of glob from all rooms the client is
-// joined to.
-func (f *Fallacy) BanUserGlobAll(userGlob string) (err error) {
-	jr, err := f.Client.JoinedRooms()
-	if err != nil {
-		return err
-	}
-
+	var wg sync.WaitGroup
 	for _, r := range jr.JoinedRooms {
-		go func(r string) { // does this race?
-			if err := f.BanUserGlob(r, userGlob); err != nil {
-				log.Println("attempting to glob ban users failed with:", err)
+		wg.Add(1)
+		go func(r id.RoomID) {
+			if err := f.GlobBanRoom(g, r); err != nil {
+				log.Printf("attempting to glob ban users from room %s failed with: %v", r, err)
 			}
 		}(r)
 	}
+	wg.Wait()
 	return
 }

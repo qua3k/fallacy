@@ -5,33 +5,42 @@
 package fallacy
 
 import (
-	"github.com/qua3k/gomatrix"
+	"log"
+
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 // isNewJoin checks if a membership event is really a new join.
-func isNewJoin(ev *gomatrix.Event) bool {
-	m, ok := ev.Content["membership"].(string)
-
-	join := func(m string, ok bool) bool {
-		return m == "join" && ok
+func isNewJoin(ev event.Event) bool {
+	isJoin := func(m event.Membership) bool {
+		return m == event.MembershipJoin
 	}
 
-	if join(m, ok) { // `membership` key must be string
-		if u, ok := ev.Unsigned["prev_content"].(map[string]interface{}); ok {
-			if pm, ok := u["membership"].(string); join(pm, ok) { // `membership` key must be string
-				return false
-			}
+	if m := ev.Content.AsMember(); !isJoin(m.Membership) {
+		return false
+	}
+
+	pc := ev.Unsigned.PrevContent
+	if pc != nil {
+		if err := pc.ParseRaw(event.StateMember); err != nil {
+			log.Println("parsing member event failed with:", err)
+			return false
 		}
-		return true
+		if p := pc.AsMember(); isJoin(p.Membership) {
+			return false
+		}
 	}
-	return false
+
+	return true
 }
 
 // WelcomeMember welcomes a member via their display name. The display name is
 // calculated as per
 // https://spec.matrix.org/v1.1/client-server-api/#calculating-the-display-name-for-a-user.
-func (f *Fallacy) WelcomeMember(displayName, sender, roomID string) (err error) {
-	if displayName == " " {
+func (f *Fallacy) WelcomeMember(displayName, sender string, roomID id.RoomID) (err error) {
+	switch displayName {
+	case "", " ":
 		displayName = sender
 	}
 
@@ -39,15 +48,16 @@ func (f *Fallacy) WelcomeMember(displayName, sender, roomID string) (err error) 
 		return "Welcome " + s + "! Howdy?"
 	}
 
-	anc := "<a href='https://matrix.to/#/" + sender + "'>" + displayName + "</a>"
 	plain := welcome(displayName)
-	format := welcome(anc)
 
-	_, err = f.Client.SendMessageEvent(roomID, "m.room.message", gomatrix.TextMessage{
+	anchor := "<a href='https://matrix.to/#/" + sender + "'>" + displayName + "</a>"
+	format := welcome(anchor)
+
+	_, err = f.Client.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
 		Body:          plain,
-		MsgType:       "m.notice",
+		Format:        event.FormatHTML,
 		FormattedBody: format,
-		Format:        "org.matrix.custom.html",
+		MsgType:       event.MsgNotice,
 	})
 	return
 }

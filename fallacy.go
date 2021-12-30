@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-// fallacy provides wrappers around the less-pretty gomatrix package. It's
+// fallacy provides wrappers around the less-pretty mautrix/go package. It's
 // mainly meant for fallacy bot use but can be imported to other packages.
 
 package fallacy
@@ -13,7 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qua3k/gomatrix"
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 const usage = `this is how you use the bot:
@@ -23,12 +25,27 @@ purge [NUMBER]						gets rid of your shitposts
 welcome [BOOL]						welcomes new members`
 
 // The fallacy stickers we can use.
-var fallacyStickers = []string{
-	"mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD",
-	"mxc://spitetech.com/rpDChtvmojnErFdIZgfKktJW",
-	"mxc://spitetech.com/KLJKMzTyTYKiHdHKSYKtNVXb",
-	"mxc://spitetech.com/EdDSfNluLxYOfJmFKTDSXmaG",
-	"mxc://spitetech.com/ziTJliFmgUpxCTXgyjSMvNKA",
+var fallacyStickers = [...]id.ContentURI{
+	{
+		Homeserver: "spitetech.com",
+		FileID:     "XFgJMFCXulNthUiFUDqoEzuD",
+	},
+	{
+		Homeserver: "spitetech.com",
+		FileID:     "rpDChtvmojnErFdIZgfKktJW",
+	},
+	{
+		Homeserver: "spitetech.com",
+		FileID:     "KLJKMzTyTYKiHdHKSYKtNVXb",
+	},
+	{
+		Homeserver: "spitetech.com",
+		FileID:     "EdDSfNluLxYOfJmFKTDSXmaG",
+	},
+	{
+		Homeserver: "spitetech.com",
+		FileID:     "ziTJliFmgUpxCTXgyjSMvNKA",
+	},
 }
 
 // Configuration options for the bot.
@@ -40,7 +57,7 @@ type Config struct {
 
 // The main Fallacy struct containing the client and config.
 type Fallacy struct {
-	Client *gomatrix.Client
+	Client *mautrix.Client
 	Config Config
 }
 
@@ -55,7 +72,7 @@ func NewConfig(firefox bool, name string, welcome bool) Config {
 
 // NewFallacy instantiates a new Fallacy struct.
 func NewFallacy(homeserverURL, userID, accessToken string, config Config) (Fallacy, error) {
-	cli, err := gomatrix.NewClient(homeserverURL, userID, accessToken)
+	cli, err := mautrix.NewClient(homeserverURL, id.UserID(userID), accessToken)
 	if err != nil {
 		return Fallacy{}, err
 	}
@@ -67,41 +84,48 @@ func NewFallacy(homeserverURL, userID, accessToken string, config Config) (Falla
 }
 
 // printHelp sends the help message into a room.
-func (f *Fallacy) printHelp(roomID string) {
+func (f *Fallacy) printHelp(roomID id.RoomID) {
 	f.Client.SendNotice(roomID, usage)
 }
 
 // sendFallacy sends a random fallacy into the chat. Users of this should
 // explicitly call rand.Seed().
-func (f *Fallacy) sendFallacy(roomID string) {
+func (f *Fallacy) sendFallacy(roomID id.RoomID) {
 	i := rand.Intn(len(fallacyStickers))
-	if _, err := f.Client.SendSticker(roomID, "look a sticker", fallacyStickers[i]); err != nil {
+	if _, err := f.Client.SendImage(roomID, "look a sticker", fallacyStickers[i]); err != nil {
 		log.Println("sending sticker failed with error:", err)
 	}
 }
 
-// HandleUserPolicy handles `m.policy.rule.user` events`.
-func (f *Fallacy) HandleUserPolicy(ev *gomatrix.Event) {
-	r, ok := ev.Content["recommendation"].(string)
-	if !ok {
-		log.Println("type assert failed when on `recommendation` key, not a string!")
+// HandleUserPolicy handles `m.policy.rule.user` events. Initially limited to
+// room admins but could possibly be extended to specific rooms.
+func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
+	if !f.isAdmin(ev.RoomID, ev.Sender) {
 		return
 	}
-	/* 	if !f.userCanMute(ev.Sender) {
 
-	   	} */
+	r, ok := ev.Content.Raw["recommendation"].(string)
+	if !ok {
+		log.Println("type assert failed on `recommendation` key, not a string!")
+		return
+	}
+
 	switch r {
 	case "m.ban":
 	case "org.matrix.mjolnir.ban":
-		f.BanUserGlobAll(ev.Content["entity"].(string))
+		f.BanUserGlobAll(ev.Content.Raw["entity"].(string))
 	}
 }
 
-// HandleMember handles `m.room.member` events
-func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
-	sender, room := ev.Sender, ev.RoomID
-	display, ok := ev.Content["displayname"].(string)
-	if !ok {
+// HandleMember handles `m.room.member` events.
+func (f *Fallacy) HandleMember(ev *event.Event) {
+	sender, room := string(ev.Sender), ev.RoomID
+	if err := ev.Content.ParseRaw(event.StateMember); err != nil {
+		log.Println("parsing member event failed with:", err)
+	}
+
+	display := ev.Content.AsMember().Displayname
+	if display == "" || display == " " {
 		display = sender
 	}
 
@@ -111,11 +135,17 @@ func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
 }
 
 // HandleMessage handles m.room.message events.
-func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
-	b, ok := ev.Body()
-	if !ok {
-		log.Println("type assert failed on `body` key; not a string!")
+func (f *Fallacy) HandleMessage(ev *event.Event) {
+	if ev.Sender == f.Client.UserID {
+		return
 	}
+
+	if err := ev.Content.ParseRaw(event.EventMessage); err != nil {
+		log.Println("parsing message event failed with:", err)
+	}
+
+	b := ev.Content.AsMessage().Body
+	l := strings.ToLower(b)
 
 	if f.Config.Firefox {
 		if l := strings.ToLower(b); strings.Contains(l, "firefox") || strings.Contains(l, "fallacy") {
@@ -124,8 +154,18 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 		}
 	}
 
-	if !strings.HasPrefix(b, "!"+f.Config.Name) {
+	if !strings.HasPrefix(l, "!"+f.Config.Name) {
 		return
+	}
+
+	// IMPORTANT: All commands are gated under the admin permission check.
+	if f.isAdmin(ev.RoomID, ev.Sender) {
+		s := strings.Fields(b)
+		if len(s) < 3 {
+			f.printHelp(ev.RoomID)
+			return
+		}
+
 	}
 
 	s := strings.Fields(b)
@@ -161,11 +201,14 @@ func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
 }
 
 // HandleTombStone handles m.room.tombstone events
-func (f *Fallacy) HandleTombstone(ev *gomatrix.Event) {
-	r := ev.Content["replacement_room"].(string) // `replacement_room` is required by spec
-
+func (f *Fallacy) HandleTombstone(ev *event.Event) {
+	r, ok := ev.Content.Raw["replacement_room"].(string)
+	if !ok {
+		log.Println("asserting replacement_room failed! expected string, got:", r)
+		return
+	}
 	_, err := f.Client.JoinRoom(r, "", map[string]string{"reason": "following room upgrade"})
 	if err != nil {
-		log.Println("attempting to join `replacement_room` failed with error:", err)
+		log.Printf("attempting to join %s failed with error: %s", r, err)
 	}
 }
