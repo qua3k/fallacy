@@ -9,6 +9,7 @@ package fallacy
 
 import (
 	"log"
+	"math/rand"
 	"strconv"
 	"strings"
 
@@ -21,13 +22,23 @@ mute [MEMBER]						avoid having to hear your friends
 purge [NUMBER]						gets rid of your shitposts
 welcome [BOOL]						welcomes new members`
 
+// The fallacy stickers we can use.
+var fallacyStickers = []string{
+	"mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD",
+	"mxc://spitetech.com/rpDChtvmojnErFdIZgfKktJW",
+	"mxc://spitetech.com/KLJKMzTyTYKiHdHKSYKtNVXb",
+	"mxc://spitetech.com/EdDSfNluLxYOfJmFKTDSXmaG",
+	"mxc://spitetech.com/ziTJliFmgUpxCTXgyjSMvNKA",
+}
+
+// Configuration options for the bot.
 type Config struct {
 	Firefox bool   // should we harass firefox users
 	Name    string // the name of the bot
 	Welcome bool   // whether to welcome new members on join
 }
 
-// The main Fallacy struct containing the configuration for the bot.
+// The main Fallacy struct containing the client and config.
 type Fallacy struct {
 	Client *gomatrix.Client
 	Config Config
@@ -60,26 +71,25 @@ func (f *Fallacy) printHelp(roomID string) {
 	f.Client.SendNotice(roomID, usage)
 }
 
-// spiteTech sends a fallacy sticker if the body text mentions "firefox".
-func (f *Fallacy) spiteTech(body, roomID string) bool {
-	l := strings.ToLower(body)
-	if strings.Contains(l, "firefox") {
-		_, err := f.Client.SendSticker(roomID, "👨 (man)", "mxc://spitetech.com/XFgJMFCXulNthUiFUDqoEzuD")
-		if err != nil {
-			log.Println("sending sticker failed with error:", err)
-		}
-		return true
+// sendFallacy sends a random fallacy into the chat. Users of this should
+// explicitly call rand.Seed().
+func (f *Fallacy) sendFallacy(roomID string) {
+	i := rand.Intn(len(fallacyStickers))
+	if _, err := f.Client.SendSticker(roomID, "look a sticker", fallacyStickers[i]); err != nil {
+		log.Println("sending sticker failed with error:", err)
 	}
-	return false
 }
 
 // HandleUserPolicy handles `m.policy.rule.user` events`.
 func (f *Fallacy) HandleUserPolicy(ev *gomatrix.Event) {
 	r, ok := ev.Content["recommendation"].(string)
 	if !ok {
-		log.Println("type assert failed when asserting `recommendation` key, not a string")
+		log.Println("type assert failed when on `recommendation` key, not a string!")
 		return
 	}
+	/* 	if !f.userCanMute(ev.Sender) {
+
+	   	} */
 	switch r {
 	case "m.ban":
 	case "org.matrix.mjolnir.ban":
@@ -100,12 +110,16 @@ func (f *Fallacy) HandleMember(ev *gomatrix.Event) {
 	}
 }
 
-// HandleMessage handles m.room.message events
+// HandleMessage handles m.room.message events.
 func (f *Fallacy) HandleMessage(ev *gomatrix.Event) {
-	b, _ := ev.Body() // body is required
+	b, ok := ev.Body()
+	if !ok {
+		log.Println("type assert failed on `body` key; not a string!")
+	}
 
 	if f.Config.Firefox {
-		if d := f.spiteTech(b, ev.RoomID); d {
+		if l := strings.ToLower(b); strings.Contains(l, "firefox") || strings.Contains(l, "fallacy") {
+			f.sendFallacy(ev.RoomID)
 			return
 		}
 	}
