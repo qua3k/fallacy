@@ -13,9 +13,32 @@ import (
 	"github.com/qua3k/gomatrix"
 )
 
-const MinimumFetch int = 20 // the minimum number of messages to fetch during a request to `/messages`
+// MinimumFetch is the minimum number of messages to fetch during a request to `/messages`.
+const MinimumFetch int = 20
 
-// modPower returns the default mod power for many matrix events
+var (
+	PurgeFilter     string
+	purgeFilterOnce sync.Once
+)
+
+func (f *Fallacy) InitPurgeFilter() string {
+	purgeFilterOnce.Do(func() {
+		PurgeFilter = f.setupPurgeFilter()
+	})
+	return PurgeFilter
+}
+
+/* type Command struct{
+	listeners map[string]listener
+}
+
+type listener func(body string)
+
+func (c *Command) Register(keyword string) {
+
+} */
+
+// modPower returns the default mod power for many matrix events.
 func modPower(event int) int {
 	if event == 0 {
 		return 50
@@ -25,7 +48,7 @@ func modPower(event int) int {
 
 // getMessageLevel returns the level users are required to have to send by
 // checking both the `events_default` key and the `m.room.message` key of
-// the `events` object
+// the `events` object.
 func getMessageLevel(pwr *gomatrix.RespPowerLevels) (level int) {
 	if ed := pwr.EventsDefault; ed != 0 { // `events_default` defaults to zero
 		level = ed
@@ -63,6 +86,10 @@ func (f *Fallacy) userCanMute(pwr *gomatrix.RespPowerLevels, userID string) bool
 	return usrPwr >= minInt(kp, bp, rp)
 }
 
+/* func (f *Fallacy) userCanRedact() {
+
+}
+*/
 // MuteUser mutes a target user in a specified room.
 func (f *Fallacy) MuteUser(roomID, senderID, targetID string) (err error) {
 	pwr, err := f.Client.PowerLevels(roomID)
@@ -92,7 +119,6 @@ func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
 		}
 		level := getMessageLevel(pwr)
 		if pwr.Users[targetID] >= level {
-			log.Println("working!")
 			return errors.New("cannot unmute a user that is already unmuted")
 		} else if level == pwr.EventsDefault {
 			delete(pwr.Users, targetID)
@@ -109,10 +135,11 @@ func (f *Fallacy) UnmuteUser(roomID, senderID, targetID string) (err error) {
 func (f *Fallacy) PurgeMessages(roomID, end string, limit int) error {
 	fetch := limit
 	if fetch < MinimumFetch {
-		fetch = MinimumFetch // always fetch a minimum amount of messages
+		fetch = MinimumFetch
 	}
 
-	resp, err := f.Client.Messages(roomID, "", end, "", 'b', fetch)
+	filter := f.setupPurgeFilter()
+	resp, err := f.Client.Messages(roomID, filter, end, "", 'b', fetch)
 	if err != nil {
 		return err
 	}
