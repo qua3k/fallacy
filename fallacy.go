@@ -110,7 +110,7 @@ func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
 
 	r, ok := ev.Content.Raw["recommendation"].(string)
 	if !ok {
-		log.Println("type assert failed on `recommendation` key, not a string!")
+		log.Printf("asserting `recommendation` key failed! expected string, got: %T\n", r)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
 	case "org.matrix.mjolnir.ban":
 		e, ok := ev.Content.Raw["entity"].(string)
 		if !ok {
-			log.Println("type assert failed on `entity` key, not a string!")
+			log.Printf("asserting `entity` key failed! expected string, got: %T\n", e)
 			return
 		}
 		f.GlobBanAll(e)
@@ -213,11 +213,11 @@ func (f *Fallacy) HandleMessage(ev *event.Event) {
 func (f *Fallacy) HandleTombstone(ev *event.Event) {
 	r, ok := ev.Content.Raw["replacement_room"].(string)
 	if !ok {
-		log.Println("asserting replacement_room failed! expected string, got:", r)
+		log.Printf("asserting `replacement_room` key failed! expected string, got: %T\n", r)
 		return
 	}
 	_, err := f.Client.JoinRoom(r, "", map[string]string{"reason": "following room upgrade"})
 	if err != nil {
-		log.Printf("attempting to join %s failed with error: %s", r, err)
+		log.Printf("attempting to join %s failed with error: %s\n", r, err)
 	}
 }
