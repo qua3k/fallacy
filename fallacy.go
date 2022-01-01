@@ -209,7 +209,7 @@ func (f *Fallacy) HandleMessage(ev *event.Event) {
 	// messages := make(chan string)
 }
 
-// HandleTombStone handles m.room.tombstone events
+// HandleTombStone handles m.room.tombstone events.
 func (f *Fallacy) HandleTombstone(ev *event.Event) {
 	r, ok := ev.Content.Raw["replacement_room"].(string)
 	if !ok {
