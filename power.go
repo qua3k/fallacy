@@ -70,3 +70,29 @@ func (f *Fallacy) GlobBanAll(userGlob string) (err error) {
 	wg.Wait()
 	return
 }
+
+// AddJoinRule adds a join rule to ban users on sight.
+func (f *Fallacy) AddJoinRule(rule string) {
+	f.Config.Lock.RLock()
+	for _, r := range f.Config.Rules {
+		if r == rule {
+			return
+		}
+	}
+	f.Config.Lock.RUnlock()
+
+	f.Config.Lock.Lock()
+	defer f.Config.Lock.Unlock()
+	f.Config.Rules = append(f.Config.Rules, rule)
+}
+
+// DeleteJoinRule deletes the rule, if it exists.
+func (f *Fallacy) DeleteJoinRule(rule string) {
+	f.Config.Lock.Lock()
+	defer f.Config.Lock.Unlock()
+	for i, r := range f.Config.Rules {
+		if r == rule {
+			f.Config.Rules = append(f.Config.Rules[:i], f.Config.Rules[i+1:]...)
+		}
+	}
+}

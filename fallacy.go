@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -50,9 +51,11 @@ var fallacyStickers = [...]id.ContentURI{
 
 // Configuration options for the bot.
 type Config struct {
-	Firefox bool   // should we harass firefox users
-	Name    string // the name of the bot
-	Welcome bool   // whether to welcome new members on join
+	Lock    sync.RWMutex
+	Firefox bool     // should we harass firefox users
+	Name    string   // the name of the bot
+	Rules   []string // user rules; can be glob
+	Welcome bool     // whether to welcome new members on join
 }
 
 // The main Fallacy struct containing the client and config.
@@ -62,10 +65,11 @@ type Fallacy struct {
 }
 
 // NewConfig instantiates a new Config struct.
-func NewConfig(firefox bool, name string, welcome bool) Config {
+func NewConfig(firefox bool, name string, rules []string, welcome bool) Config {
 	return Config{
 		Firefox: firefox,
 		Name:    name,
+		Rules:   rules,
 		Welcome: welcome,
 	}
 }
@@ -113,7 +117,7 @@ func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
 	switch r {
 	case "m.ban":
 	case "org.matrix.mjolnir.ban":
-		f.BanUserGlobAll(ev.Content.Raw["entity"].(string))
+		f.GlobBanAll(ev.Content.Raw["entity"].(string))
 	}
 }
 
