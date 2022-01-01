@@ -117,7 +117,12 @@ func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
 	switch r {
 	case "m.ban":
 	case "org.matrix.mjolnir.ban":
-		f.GlobBanAll(ev.Content.Raw["entity"].(string))
+		e, ok := ev.Content.Raw["entity"].(string)
+		if !ok {
+			log.Println("type assert failed on `entity` key, not a string!")
+			return
+		}
+		f.GlobBanAll(e)
 	}
 }
 
