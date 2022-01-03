@@ -8,29 +8,17 @@ import (
 	"errors"
 	"log"
 	"sync"
-	"sync/atomic"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-// MinimumFetch is the minimum number of messages to fetch during a request to `/messages`.
-const MinimumFetch int = 20
-
-/* type Command struct{
-	listeners map[string]listener
-}
-
-type listener func(body string)
-
-func (c *Command) Register(keyword string) {
-
-} */
+type Commands struct{}
 
 // powerLevels returns a power levels struct.
-func (f *Fallacy) powerLevels(roomID id.RoomID) (resp *event.PowerLevelsEventContent, err error) {
-	err = f.Client.StateEvent(roomID, event.StatePowerLevels, "", &resp)
+func (f *Fallacy) powerLevels(roomID id.RoomID) (resp event.PowerLevelsEventContent, err error) {
+	err = f.Client.StateEvent(roomID, event.StatePowerLevels, "", resp)
 	return
 }
 
@@ -59,94 +47,83 @@ func (f *Fallacy) isAdmin(roomID id.RoomID, userID id.UserID) bool {
 }
 
 // MuteUser mutes a target user in a specified room by utilizing power levels.
-func (f *Fallacy) MuteUser(roomID id.RoomID, senderID, targetID id.UserID) (err error) {
-	pwr, err := f.powerLevels(roomID)
+func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
+	pl, err := f.powerLevels(roomID)
 	if err != nil {
 		return
 	}
-	level := pwr.GetEventLevel(event.EventMessage)
-	if pwr.GetUserLevel(targetID) <= level-1 {
+	level := pl.GetEventLevel(event.EventMessage)
+	if pl.GetUserLevel(targetID) <= level-1 {
 		return errors.New("cannot mute a user that is already muted")
 	}
-	pwr.SetUserLevel(targetID, level)
-	_, err = f.Client.SendStateEvent(roomID, event.StatePowerLevels, "", pwr)
+	pl.SetUserLevel(targetID, level)
+	_, err = f.Client.SendStateEvent(roomID, event.StatePowerLevels, "", &pl)
 	return
 }
 
 // UnmuteUser unmutes a target user in a specified room by utilizing power levels.
-func (f *Fallacy) UnmuteUser(roomID id.RoomID, senderID, targetID id.UserID) (err error) {
-	pwr, err := f.powerLevels(roomID)
+func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
+	pl, err := f.powerLevels(roomID)
 	if err != nil {
 		return
 	}
-	level := pwr.GetEventLevel(event.EventMessage)
-	if pwr.GetUserLevel(targetID) >= level {
+	level := pl.GetEventLevel(event.EventMessage)
+	if pl.GetUserLevel(targetID) >= level {
 		return errors.New("cannot unmute a user that is not muted")
 	}
-	pwr.SetUserLevel(targetID, level)
-	_, err = f.Client.SendStateEvent(roomID, event.StatePowerLevels, "", pwr)
+	pl.SetUserLevel(targetID, level)
+	_, err = f.Client.SendStateEvent(roomID, event.StatePowerLevels, "", &pl)
 	return
 }
 
-// PurgeMessages redacts a number of room events in a room, optionally ending at
-// a specific pagination token obtained from a previous request to the endpoint.
+// RedactMessage only redacts message events, skipping redaction events, already
+// redacted events, and state events. Rather than checking for the presence of
+// keys in the content object, we check for the presence of the redacted_because
+// object to ensure future compatibility with e2ee.
+func (f *Fallacy) RedactMessage(ev *event.Event, wait *sync.WaitGroup) {
+	defer wait.Done()
+	if ev.StateKey == nil ||
+		ev.Type != event.EventRedaction ||
+		ev.Unsigned.RedactedBecause == nil {
+		if _, err := f.Client.RedactEvent(ev.RoomID, ev.ID, mautrix.ReqRedact{}); err != nil {
+			log.Println("redacting message failed with error:", err)
+		}
+	}
+}
+
+// PurgeMessages redacts all message events newer than the specified event ID.
+// It's loosely inspired by Telegram's SophieBot mechanics.
 //
-// Alternative solutions were evaluated such as deleting all messages starting
-// from a message that was replied to the newest message à la Telegram's
-// SophieBot but they were determined to be infeasible as calculating the
-// pagination tokens were specific to Synapse and not exposed through the
-// client-server API.
-func (f *Fallacy) PurgeMessages(roomID id.RoomID, end string, limit int) error {
-	var (
-		fetchNum    int    = limit
-		purgedCount uint32 = uint32(limit)
-		wg          sync.WaitGroup
-	)
+// TODO: check for races
+func (f *Fallacy) PurgeMessages(roomID id.RoomID, eventID id.EventID) error {
+	var wg sync.WaitGroup
 
-	if limit <= 0 {
-		return errors.New("nothing to purge...")
+	purgeMessages := func(s []*event.Event) {
+		for _, e := range s {
+			if e == nil {
+				continue
+			}
+			wg.Add(1)
+			go f.RedactMessage(e, &wg)
+		}
 	}
 
-	if fetchNum < MinimumFetch {
-		fetchNum = MinimumFetch // fetchNum must never be less than MinimumFetch
-	}
-
-	resp, err := f.Client.Messages(roomID, end, "", 'b', fetchNum)
+	filter := setupPurgeFilter()
+	con, err := f.Client.Context(roomID, eventID, &filter, 1)
 	if err != nil {
 		return err
 	}
 
-	chunkSize := len(resp.Chunk)
-	if limit < chunkSize {
-		chunkSize = limit // we may fetch more events than we actually need
-	}
+	wg.Add(1)
+	go f.RedactMessage(con.Event, &wg)
+	purgeMessages(con.EventsAfter)
 
-	for _, e := range resp.Chunk[0:chunkSize] {
-		wg.Add(1)
-		go func(e event.Event) { // check for races
-			defer wg.Done()
-			if e.Type == event.EventRedaction ||
-				e.StateKey != nil ||
-				e.Unsigned.RedactedBecause != nil {
-				atomic.AddUint32(&purgedCount, ^uint32(0))
-				return
-			}
-			if _, err := f.Client.RedactEvent(roomID, e.ID, mautrix.ReqRedact{}); err != nil {
-				log.Println(err)
-			}
-		}(*e)
+	msg, err := f.Client.Messages(roomID, con.End, "", 'f', &filter, 2147483647) // will the server give us all these events?
+	if err != nil {
+		return err
 	}
+	purgeMessages(msg.Chunk)
+
 	wg.Wait()
-
-	if resp.End == "" {
-		return nil // no more messages
-	}
-
-	// Recurse until we reach the end
-	if u := int(purgedCount); u < limit {
-		miss := limit - u
-		return f.PurgeMessages(roomID, resp.End, miss)
-	}
-
 	return nil
 }
