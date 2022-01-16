@@ -16,9 +16,15 @@ import (
 
 type Commands struct{}
 
-// powerLevels returns a power levels struct.
+// powerLevels returns a power levels struct from the specified roomID.
 func (f *Fallacy) powerLevels(roomID id.RoomID) (resp event.PowerLevelsEventContent, err error) {
-	err = f.Client.StateEvent(roomID, event.StatePowerLevels, "", resp)
+	err = f.Client.StateEvent(roomID, event.StatePowerLevels, "", &resp)
+	return
+}
+
+// acls returns an ACL struct.
+func (f *Fallacy) acls(roomID id.RoomID) (resp event.ServerACLEventContent, err error) {
+	err = f.Client.StateEvent(roomID, event.StateServerACL, "", &resp)
 	return
 }
 
