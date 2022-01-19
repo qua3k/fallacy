@@ -118,3 +118,26 @@ func (f *Fallacy) GlobBanJoinedRooms(glob glob.Glob) (err error) {
 	wg.Wait()
 	return
 }
+
+// BanServerJoinedRooms utilizes the power of ACL to add the server to ban
+// servers matching the ACL from all rooms the client is joined to, returning an
+// error if unsuccessful.
+func (f *Fallacy) BanServerJoinedRooms(homeserverID string) (err error) {
+	jr, err := f.Client.JoinedRooms()
+	if err != nil {
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, room := range jr.JoinedRooms {
+		wg.Add(1)
+		go func(r id.RoomID) {
+			defer wg.Done()
+			if err := f.BanServer(r, homeserverID); err != nil {
+				log.Printf("unable to ban server from room %s, failed with error: %s\n", r.String(), err.Error())
+			}
+		}(room)
+	}
+	wg.Wait()
+	return
+}
