@@ -80,12 +80,12 @@ func (f *Fallacy) GlobBanJoinedMembers(glob glob.Glob, roomID id.RoomID) (err er
 		wg.Add(1)
 		go func(u id.UserID) {
 			defer wg.Done()
-			if isAdmin(pl, roomID, u) {
+			if isAdmin(&pl, roomID, u) {
 				const adminBanMessage = "cannot ban an admin, try demoting them first..."
 				f.attemptSendNotice(roomID, adminBanMessage)
 				return
 			}
-			if err := f.GlobBanUser(glob, roomID, user); err == nil {
+			if err := f.GlobBanUser(glob, roomID, u); err == nil {
 				return
 			}
 			f.attemptSendNotice(roomID, err.Error())

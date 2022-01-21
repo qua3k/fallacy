@@ -28,7 +28,7 @@ func (f *Fallacy) acls(roomID id.RoomID) (resp event.ServerACLEventContent, err 
 	return
 }
 
-func isAdmin(pl event.PowerLevelsEventContent, roomID id.RoomID, userID id.UserID) bool {
+func isAdmin(pl *event.PowerLevelsEventContent, roomID id.RoomID, userID id.UserID) bool {
 	bp, kp, rp := pl.Ban(), pl.Kick(), pl.Redact()
 
 	minInt := func(i ...int) (m int) {
@@ -53,7 +53,7 @@ func (f *Fallacy) isAdmin(roomID id.RoomID, userID id.UserID) bool {
 		return false
 	}
 
-	return isAdmin(pl, roomID, userID)
+	return isAdmin(&pl, roomID, userID)
 }
 
 // BanServer bans a server by adding it to the room ACL.
