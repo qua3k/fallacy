@@ -8,6 +8,7 @@
 package fallacy
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"strconv"
@@ -92,13 +93,32 @@ func (f *Fallacy) printHelp(roomID id.RoomID) {
 	f.Client.SendNotice(roomID, usage)
 }
 
-// sendFallacy sends a random fallacy into the chat. Users of this should
+// SendFallacy sends a random fallacy into the chat. Users of this should
 // explicitly call rand.Seed().
-func (f *Fallacy) sendFallacy(roomID id.RoomID) {
-	i := rand.Intn(len(fallacyStickers))
-	if _, err := f.Client.SendImage(roomID, "look a sticker", fallacyStickers[i]); err != nil {
-		log.Println("sending sticker failed with error:", err)
+func (f *Fallacy) SendFallacy(ev event.Event) (err error) {
+	const DefaultStickerSize = 256
+
+	length := len(fallacyStickers)
+	if length == 0 {
+		return
 	}
+
+	i := rand.Intn(length)
+	url := fallacyStickers[i]
+	_, err = f.Client.SendMessageEvent(ev.RoomID, event.EventSticker, &event.MessageEventContent{
+		Body: "no firefox here",
+		Info: &event.FileInfo{
+			Height: DefaultStickerSize,
+			ThumbnailInfo: &event.FileInfo{
+				Height: DefaultStickerSize,
+				Width:  DefaultStickerSize,
+			},
+			ThumbnailURL: url.CUString(),
+			Width:        DefaultStickerSize,
+		},
+		URL: url.CUString(),
+	})
+	return
 }
 
 // HandleUserPolicy handles `m.policy.rule.user` events. Initially limited to
