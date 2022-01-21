@@ -127,18 +127,20 @@ func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
 }
 
 // HandleMember handles `m.room.member` events.
-func (f *Fallacy) HandleMember(ev *event.Event) {
-	sender, room := string(ev.Sender), ev.RoomID
+func (f *Fallacy) HandleMember(_ mautrix.EventSource, ev *event.Event) {
+	sender, room := ev.Sender.String(), ev.RoomID
 	if err := ev.Content.ParseRaw(event.StateMember); err != nil {
 		log.Println("parsing member event failed with:", err)
+		return
 	}
 
-	display := ev.Content.AsMember().Displayname
-	if display == "" || display == " " {
-		display = sender
+	mem := ev.Content.AsMember()
+	if mem == nil {
+		return
 	}
 
-	if f.Config.Welcome && isNewJoin(ev) {
+	if f.Config.Welcome && isNewJoin(*ev) {
+		display := mem.Displayname
 		f.WelcomeMember(display, sender, room)
 	}
 }
