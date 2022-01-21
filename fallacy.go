@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gobwas/glob"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -121,10 +122,10 @@ func (f *Fallacy) SendFallacy(ev event.Event) (err error) {
 	return
 }
 
-// HandleUserPolicy handles `m.policy.rule.user` events. Initially limited to
+// HandleUserPolicy handles m.policy.rule.user events. Initially limited to
 // room admins but could possibly be extended to specific rooms.
-func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
-	if !f.isAdmin(ev.RoomID, ev.Sender) {
+func (f *Fallacy) HandleUserPolicy(_ mautrix.EventSource, ev *event.Event) {
+	if ev.Sender == f.Client.UserID || !f.isAdmin(ev.RoomID, ev.Sender) {
 		return
 	}
 
@@ -135,14 +136,43 @@ func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
 	}
 
 	switch r {
-	case "m.ban":
-	case "org.matrix.mjolnir.ban":
+	case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove non-spec mjolnir recommendation
 		e, ok := ev.Content.Raw["entity"].(string)
 		if !ok {
 			log.Printf("asserting `entity` key failed! expected string, got: %T\n", e)
 			return
 		}
-		f.GlobBanAll(e)
+
+		g, err := glob.Compile(e)
+		if err != nil {
+			f.attemptSendNotice(ev.RoomID, "not a valid glob pattern!")
+			return
+		}
+		f.GlobBanJoinedRooms(g)
+	}
+}
+
+// HandleServerPolicy handles m.policy.rule.server events. Initially limited to
+// room admins but could possibly be extended to specific rooms.
+func (f *Fallacy) HandleServerPolicy(_ mautrix.EventSource, ev *event.Event) {
+	if ev.Sender == f.Client.UserID || !f.isAdmin(ev.RoomID, ev.Sender) {
+		return
+	}
+
+	r, ok := ev.Content.Raw["recommendation"].(string)
+	if !ok {
+		log.Printf("asserting `recommendation` key failed! expected string, got: %T\n", r)
+		return
+	}
+
+	switch r {
+	case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove non-spec mjolnir recommendation
+		e, ok := ev.Content.Raw["entity"].(string)
+		if !ok {
+			log.Printf("asserting `entity` key failed! expected string, got: %T\n", e)
+			return
+		}
+		f.BanServerJoinedRooms(e)
 	}
 }
 
