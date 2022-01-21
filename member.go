@@ -6,6 +6,7 @@ package fallacy
 
 import (
 	"log"
+	"strings"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -22,37 +23,39 @@ func isNewJoin(ev event.Event) bool {
 	}
 
 	pc := ev.Unsigned.PrevContent
-	if pc != nil {
-		if err := pc.ParseRaw(event.StateMember); err != nil {
-			log.Println("parsing member event failed with:", err)
-			return false
-		}
-		if p := pc.AsMember(); isJoin(p.Membership) {
-			return false
-		}
+	if pc == nil {
+		return true
 	}
 
+	if err := pc.ParseRaw(event.StateMember); err != nil {
+		log.Println("parsing member event failed with:", err)
+		return false
+	}
+
+	if p := pc.AsMember(); isJoin(p.Membership) {
+		return false
+	}
 	return true
 }
 
 // WelcomeMember welcomes a member via their display name. The display name is
 // calculated as per
 // https://spec.matrix.org/v1.1/client-server-api/#calculating-the-display-name-for-a-user.
-func (f *Fallacy) WelcomeMember(displayName, sender string, roomID id.RoomID) (err error) {
+func (f *Fallacy) WelcomeMember(displayName string, sender id.UserID, roomID id.RoomID) (err error) {
+	senderString := sender.String()
 	switch displayName {
 	case "", " ":
-		displayName = sender
+		displayName = senderString
 	}
 
 	welcome := func(s string) string {
-		return "Welcome " + s + "! Howdy?"
+		return strings.Join([]string{"Welcome", s + "!", "Howdy?"}, " ")
 	}
 
 	plain := welcome(displayName)
 
-	anchor := "<a href='https://matrix.to/#/" + sender + "'>" + displayName + "</a>"
+	anchor := strings.Join([]string{"<a href='https://matrix.to/#/", senderString, "'>", displayName, "</a>"}, "")
 	format := welcome(anchor)
-
 	_, err = f.Client.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
 		Body:          plain,
 		Format:        event.FormatHTML,

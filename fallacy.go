@@ -128,7 +128,7 @@ func (f *Fallacy) HandleUserPolicy(ev *event.Event) {
 
 // HandleMember handles `m.room.member` events.
 func (f *Fallacy) HandleMember(_ mautrix.EventSource, ev *event.Event) {
-	sender, room := ev.Sender.String(), ev.RoomID
+	sender, room := ev.Sender, ev.RoomID
 	if err := ev.Content.ParseRaw(event.StateMember); err != nil {
 		log.Println("parsing member event failed with:", err)
 		return
