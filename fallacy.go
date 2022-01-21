@@ -62,8 +62,9 @@ type Config struct {
 
 // The main Fallacy struct containing the client and config.
 type Fallacy struct {
-	Client *mautrix.Client
-	Config Config
+	Client   *mautrix.Client
+	Config   *Config
+	Handlers map[string][]commandListener
 }
 
 // NewConfig instantiates a new Config struct.
@@ -77,7 +78,7 @@ func NewConfig(firefox bool, name string, rules []string, welcome bool) Config {
 }
 
 // NewFallacy instantiates a new Fallacy struct.
-func NewFallacy(homeserverURL, userID, accessToken string, config Config) (Fallacy, error) {
+func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (Fallacy, error) {
 	cli, err := mautrix.NewClient(homeserverURL, id.UserID(userID), accessToken)
 	if err != nil {
 		return Fallacy{}, err
