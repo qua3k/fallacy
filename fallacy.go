@@ -272,11 +272,9 @@ func (f *Fallacy) HandleTombstone(_ mautrix.EventSource, ev *event.Event) {
 		return
 	}
 
-	_, err := f.Client.JoinRoom(r, "", map[string]string{"reason": "following room upgrade"})
-	if err != nil {
-		msg := fmt.Sprintf("attempting to join %s failed with error: %v", r, err)
-		if _, err = f.Client.SendNotice(ev.RoomID, msg); err != nil {
-			log.Println(msg)
-		}
+	reason := map[string]string{"reason": "following room upgrade"}
+	if _, err := f.Client.JoinRoom(r, "", reason); err != nil {
+		msg := strings.Join([]string{"attempting to join room", r, "failed with error:", err.Error()}, " ")
+		f.attemptSendNotice(ev.RoomID, msg)
 	}
 }
