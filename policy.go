@@ -6,6 +6,7 @@ package fallacy
 
 import (
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/gobwas/glob"
@@ -19,12 +20,14 @@ func (f *Fallacy) attemptSendNotice(roomID id.RoomID, text string) {
 	if _, err := f.Client.SendNotice(roomID, text); err == nil {
 		return
 	}
-	log.Printf("could not send notice '%s' into room %s!\n", text, roomID.String())
+	msg := strings.Join([]string{"could not send notice", text, "into room", roomID.String()}, " ")
+	log.Println(msg)
 }
 
 // AddJoinRule adds a join rule to ban users on sight.
 func (f *Fallacy) AddJoinRule(rule string) {
-	f.Config.Lock.Lock() // TODO: evaluate speed of rlock/runlock/lock/unlock
+	// TODO: evaluate speed of rlock/runlock/lock/unlock
+	f.Config.Lock.Lock()
 	defer f.Config.Lock.Unlock()
 
 	for _, r := range f.Config.Rules {
@@ -134,7 +137,8 @@ func (f *Fallacy) BanServerJoinedRooms(homeserverID string) (err error) {
 		go func(r id.RoomID) {
 			defer wg.Done()
 			if err := f.BanServer(r, homeserverID); err != nil {
-				log.Printf("unable to ban server from room %s, failed with error: %s\n", r.String(), err.Error())
+				msg := strings.Join([]string{"unable to ban server from room", r.String(), "failed with error:", err.Error()}, " ")
+				log.Println(msg)
 			}
 		}(room)
 	}
