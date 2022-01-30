@@ -44,9 +44,10 @@ func (f *Fallacy) DeleteJoinRule(rule string) {
 	defer f.Config.Lock.Unlock()
 
 	for i, r := range f.Config.Rules {
-		if r == rule {
-			f.Config.Rules = append(f.Config.Rules[:i], f.Config.Rules[i+1:]...)
+		if r != rule {
+			continue
 		}
+		f.Config.Rules = append(f.Config.Rules[:i], f.Config.Rules[i+1:]...)
 	}
 }
 
@@ -88,13 +89,11 @@ func (f *Fallacy) GlobBanJoinedMembers(glob glob.Glob, roomID id.RoomID) (err er
 				f.attemptSendNotice(roomID, adminBanMessage)
 				return
 			}
-			if err := f.GlobBanUser(glob, roomID, u); err == nil {
-				return
+			if err := f.GlobBanUser(glob, roomID, u); err != nil {
+				f.attemptSendNotice(roomID, err.Error())
 			}
-			f.attemptSendNotice(roomID, err.Error())
 		}(user)
 	}
-
 	wg.Wait()
 	return
 }
@@ -117,7 +116,6 @@ func (f *Fallacy) GlobBanJoinedRooms(glob glob.Glob) (err error) {
 			}
 		}(room)
 	}
-
 	wg.Wait()
 	return
 }
