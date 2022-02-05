@@ -14,7 +14,42 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type Commands struct{}
+type commandListener func(command []string, event event.Event) error
+
+// Register adds a function to the map.
+func (f *Fallacy) Register(keyword string, callback commandListener) {
+	_, ok := f.Handlers[keyword]
+	if !ok {
+		f.Handlers[keyword] = []commandListener{}
+	}
+	f.Handlers[keyword] = append(f.Handlers[keyword], callback)
+}
+
+// notifyListeners notifies listeners of incoming events.
+func (f *Fallacy) notifyListeners(command []string, event event.Event) {
+	roomID := event.RoomID
+
+	if len := len(command); len <= 2 {
+		f.printHelp(roomID)
+		return
+	}
+
+	action := command[1]
+	for keyword, listen := range f.Handlers {
+		if action != keyword {
+			continue
+		}
+
+		for _, fn := range listen {
+			if err := fn(command, event); err != nil {
+				log.Println(err)
+			}
+		}
+		return
+	}
+	f.attemptSendNotice(roomID, action+" is not a valid command!")
+	f.printHelp(roomID)
+}
 
 // powerLevels returns a power levels struct from the specified roomID.
 func (f *Fallacy) powerLevels(roomID id.RoomID) (resp event.PowerLevelsEventContent, err error) {
