@@ -47,6 +47,12 @@ func (s *FallacySyncer) ProcessResponse(res *mautrix.RespSync, since string) (er
 		}
 	}()
 
+	for _, listener := range s.syncListeners {
+		if !listener(res, since) {
+			return
+		}
+	}
+
 	s.processSyncEvents("", res.Presence.Events, mautrix.EventSourcePresence)
 	s.processSyncEvents("", res.AccountData.Events, mautrix.EventSourceAccountData)
 

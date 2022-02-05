@@ -84,11 +84,25 @@ func main() {
 	syncer.OnEventType(event.StateMember, f.HandleMember)
 	syncer.OnEventType(event.EventMessage, f.HandleMessage)
 	syncer.OnEventType(event.StateTombstone, f.HandleTombstone)
-	f.Register("ban", f.GlobBanSlice)
-	f.Register("purge", f.PurgeMessages)
-	f.Register("say", f.SayMessage)
-	f.Register("mute", f.MuteUsers)
-	f.Register("unmute", f.UnmuteUsers)
+	f.Register("ban", fallacy.CallbackStruct{
+		Function: f.GlobBanSlice,
+		MinArgs:  1,
+	})
+	f.Register("purge", fallacy.CallbackStruct{
+		Function: f.PurgeMessages,
+	})
+	f.Register("say", fallacy.CallbackStruct{
+		Function: f.SayMessage,
+		MinArgs:  1,
+	})
+	f.Register("mute", fallacy.CallbackStruct{
+		Function: f.MuteUsers,
+		MinArgs:  1,
+	})
+	f.Register("unmute", fallacy.CallbackStruct{
+		Function: f.MuteUsers,
+		MinArgs:  1,
+	})
 
 	old := &mautrix.OldEventIgnorer{
 		UserID: f.Client.UserID,

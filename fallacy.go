@@ -65,7 +65,7 @@ type Config struct {
 type Fallacy struct {
 	Client   *mautrix.Client
 	Config   *Config
-	Handlers map[string][]commandListener
+	Handlers map[string][]CallbackStruct
 }
 
 // NewConfig instantiates a new Config struct.
@@ -88,7 +88,7 @@ func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (*Fal
 	return &Fallacy{
 		Client:   cli,
 		Config:   config,
-		Handlers: make(map[string][]commandListener),
+		Handlers: make(map[string][]CallbackStruct),
 	}, nil
 }
 
@@ -161,7 +161,9 @@ func (f *Fallacy) HandleUserPolicy(_ mautrix.EventSource, ev *event.Event) {
 			f.attemptSendNotice(ev.RoomID, "not a valid glob pattern!")
 			return
 		}
-		f.GlobBanJoinedRooms(g)
+		if err := f.GlobBanJoinedRooms(g); err != nil {
+			log.Println()
+		}
 	}
 }
 

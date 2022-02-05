@@ -17,11 +17,16 @@ import (
 
 type commandListener func(command []string, event event.Event)
 
+type CallbackStruct struct {
+	Function commandListener
+	MinArgs  int
+}
+
 // Register adds a function to the map.
-func (f *Fallacy) Register(keyword string, callback commandListener) {
+func (f *Fallacy) Register(keyword string, callback CallbackStruct) {
 	_, ok := f.Handlers[keyword]
 	if !ok {
-		f.Handlers[keyword] = []commandListener{}
+		f.Handlers[keyword] = []CallbackStruct{}
 	}
 	f.Handlers[keyword] = append(f.Handlers[keyword], callback)
 }
@@ -30,7 +35,7 @@ func (f *Fallacy) Register(keyword string, callback commandListener) {
 func (f *Fallacy) notifyListeners(command []string, event event.Event) {
 	roomID := event.RoomID
 
-	if len := len(command); len <= 2 {
+	if len := len(command); len < 2 {
 		f.printHelp(roomID)
 		return
 	}
@@ -41,13 +46,18 @@ func (f *Fallacy) notifyListeners(command []string, event event.Event) {
 			continue
 		}
 
-		for _, fn := range listen {
+		for _, s := range listen {
 			input := command[2:]
-			fn(input, event)
+			if len(input) < s.MinArgs {
+				continue
+			}
+			s.Function(input, event)
 		}
 		return
 	}
-	f.attemptSendNotice(roomID, action+" is not a valid command!")
+	if strings.EqualFold(action, "help") {
+		f.attemptSendNotice(roomID, action+" is not a valid command!")
+	}
 	f.printHelp(roomID)
 }
 
