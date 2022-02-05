@@ -8,10 +8,9 @@
 package fallacy
 
 import (
-	"fmt"
+	"bufio"
 	"log"
 	"math/rand"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -21,11 +20,13 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-const usage = `this is how you use the bot:
-ban [MEMBER] [REASON]				bans your enemies
-mute [MEMBER]						avoid having to hear your friends
-purge [NUMBER]						gets rid of your shitposts
-welcome [BOOL]						welcomes new members`
+const usage = `# fallacy bot help
+## the following commands are available:
+
+BAN:                        bans your enemies
+MUTE:                       avoid having to hear your friends
+PURGE:                      gets rid of your shitposts
+WELCOME:                    welcomes new members`
 
 // The fallacy stickers we can use.
 var fallacyStickers = [...]id.ContentURI{
@@ -88,6 +89,19 @@ func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (Fall
 		Client: cli,
 		Config: config,
 	}, nil
+}
+
+// unreadable are the unreadable constants.
+var unreadable = [2]string{"*", ">"}
+
+// isUnreadable returns whether a line is prefixed with an unreadable constant.
+func isUnreadable(line string) bool {
+	for _, s := range unreadable {
+		if strings.HasPrefix(line, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // printHelp sends the help message into a room, propagating errors from SendNotice.
@@ -189,69 +203,34 @@ func (f *Fallacy) HandleMember(_ mautrix.EventSource, ev *event.Event) {
 }
 
 // HandleMessage handles m.room.message events.
-func (f *Fallacy) HandleMessage(ev *event.Event) {
+func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 	if ev.Sender == f.Client.UserID {
 		return
 	}
 
-	if err := ev.Content.ParseRaw(event.EventMessage); err != nil {
-		log.Println("parsing message event failed with:", err)
-	}
-
-	b := ev.Content.AsMessage().Body
-	l := strings.ToLower(b)
-
-	if f.Config.Firefox {
-		if l := strings.ToLower(b); strings.Contains(l, "firefox") || strings.Contains(l, "fallacy") {
-			f.sendFallacy(ev.RoomID)
-			return
-		}
-	}
-
-	if !strings.HasPrefix(l, "!"+f.Config.Name) {
+	msg := ev.Content.AsMessage()
+	if msg == nil {
+		log.Println("HandleMessage failed, got a nil pointer!")
 		return
 	}
 
-	// IMPORTANT: All commands are gated under the admin permission check.
-	if f.isAdmin(ev.RoomID, ev.Sender) {
-		s := strings.Fields(b)
-		if len(s) < 3 {
-			f.printHelp(ev.RoomID)
-			return
+	body := msg.Body
+
+	reader := strings.NewReader(body)
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case len(line) < 1, isUnreadable(line):
+			continue
 		}
 
+		fields, prefix := strings.Fields(line), "!"+f.Config.Name
+		if !strings.EqualFold(prefix, fields[0]) {
+			continue
+		}
+		f.notifyListeners(fields, *ev)
 	}
-
-	s := strings.Fields(b)
-	if len(s) < 3 {
-		f.printHelp(ev.RoomID)
-		return
-	}
-
-	switch s[1] {
-	case "mute":
-		if err := f.MuteUser(ev.RoomID, ev.Sender, s[2]); err != nil {
-			log.Println(err)
-		}
-		return
-	case "purge":
-		l, err := strconv.Atoi(s[2])
-		if err != nil {
-			f.printHelp(ev.RoomID)
-			return
-		}
-		if err := f.PurgeMessages(ev.RoomID, "", l); err != nil {
-			log.Println(err)
-		}
-		return
-	case "unmute":
-		if err := f.UnmuteUser(ev.RoomID, ev.Sender, s[2]); err != nil {
-			log.Println(err)
-		}
-		return
-	}
-
-	// messages := make(chan string)
 }
 
 // HandleTombStone handles m.room.tombstone events, automatically joining the
