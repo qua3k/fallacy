@@ -98,17 +98,13 @@ func (f *Fallacy) printHelp(roomID id.RoomID) (err error) {
 
 // SendFallacy sends a random fallacy into the chat. Users of this should
 // explicitly call rand.Seed().
-func (f *Fallacy) SendFallacy(ev event.Event) (err error) {
+func (f *Fallacy) SendFallacy(roomID id.RoomID) (err error) {
 	const DefaultStickerSize = 256
-
-	length := len(fallacyStickers)
-	if length == 0 {
-		return
-	}
+	const length = len(fallacyStickers)
 
 	i := rand.Intn(length)
 	url := fallacyStickers[i]
-	_, err = f.Client.SendMessageEvent(ev.RoomID, event.EventSticker, &event.MessageEventContent{
+	_, err = f.Client.SendMessageEvent(roomID, event.EventSticker, &event.MessageEventContent{
 		Body: "no firefox here",
 		Info: &event.FileInfo{
 			Height: DefaultStickerSize,
