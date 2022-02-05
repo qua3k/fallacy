@@ -245,5 +245,14 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	}
 	purgeMessages(msg.Chunk)
 	wg.Wait()
+}
+
+func (f *Fallacy) SayMessage(message []string, ev event.Event) {
+	roomID, userID := parseMessage(ev)
+	if !f.isAdmin(roomID, userID) {
+		f.attemptSendNotice(roomID, "shut up ur not admin")
 		return
+	}
+	msg := strings.Join(message, " ")
+	f.attemptSendNotice(roomID, msg)
 }
