@@ -7,6 +7,7 @@ package fallacy
 import (
 	"errors"
 	"log"
+	"strings"
 	"sync"
 
 	"maunium.net/go/mautrix"
@@ -36,7 +37,7 @@ func (f *Fallacy) notifyListeners(command []string, event event.Event) {
 
 	action := command[1]
 	for keyword, listen := range f.Handlers {
-		if action != keyword {
+		if !strings.EqualFold(action, keyword) {
 			continue
 		}
 
