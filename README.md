@@ -2,8 +2,11 @@
 
 [![GoDoc](https://godoc.org/github.com/qua3k/fallacy?status.svg)](https://godoc.org/github.com/qua3k/fallacy)
 
-
 "fallacy bot good" – a logician
+
+## what this is
+
+this is bot i think it better than mjolnir
 
 ## features
 
@@ -17,7 +20,6 @@
 ## todo
 
 *   automatically unmute users after a certain period of time
-
 
 ## maybe
 
@@ -35,6 +37,3 @@
 
 
 warnings are useless and i dont want them
-
-TODO: REVIEW TYPE ASSERTS
-TODO: AUDIT FOR LOOPS

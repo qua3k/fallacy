@@ -15,10 +15,6 @@
 # vendor/
 
 
-purge.go
 undone.go
 *.toml
-
-fallacy/
-test/
 .vscode/
