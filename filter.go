@@ -5,8 +5,6 @@
 package fallacy
 
 import (
-	"log"
-
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )
@@ -37,33 +35,4 @@ func setupPurgeFilter() mautrix.FilterPart {
 			event.StateTopic,
 		},
 	}
-}
-
-// SetupSyncFilter returns a Filter adequate for fetching the events
-// necessary to sync messages.
-func (f *Fallacy) SetupSyncFilter() (resp *mautrix.RespCreateFilter) {
-	filter := mautrix.Filter{
-		Room: mautrix.RoomFilter{
-			State: mautrix.FilterPart{
-				LazyLoadMembers: true,
-				Types: []event.Type{
-					event.StateMember,
-					event.StatePolicyServer,
-					event.StatePolicyUser,
-					event.StateTombstone,
-				},
-			},
-			Timeline: mautrix.FilterPart{
-				Types: []event.Type{
-					event.EventMessage,
-				},
-			},
-		},
-	}
-
-	resp, err := f.Client.CreateFilter(&filter)
-	if err != nil {
-		log.Panicln(err)
-	}
-	return
 }
