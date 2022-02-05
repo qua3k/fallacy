@@ -42,7 +42,8 @@ func (f *Fallacy) notifyListeners(command []string, event event.Event) {
 		}
 
 		for _, fn := range listen {
-			if err := fn(command, event); err != nil {
+			input := command[2:]
+			if err := fn(input, event); err != nil {
 				log.Println(err)
 			}
 		}
