@@ -14,6 +14,9 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+// the reason for the season
+const globBanReason = "u jus got glob ban"
+
 // attemptSendNotice wraps Client.SendNotice, logging when a notice is unable to
 // be sent.
 func (f *Fallacy) attemptSendNotice(roomID id.RoomID, text string) {
@@ -51,16 +54,21 @@ func (f *Fallacy) DeleteJoinRule(rule string) {
 	}
 }
 
+func (f *Fallacy) banWithReason(roomID id.RoomID, userID id.UserID, reason string) (err error) {
+	_, err = f.Client.BanUser(roomID, &mautrix.ReqBanUser{
+		Reason: reason,
+		UserID: userID,
+	})
+	return
+}
+
 // GlobBanUser bans a single user from the room if it matches the supplied glob,
 // returning an error if unsuccessful.
 func (f *Fallacy) GlobBanUser(glob glob.Glob, roomID id.RoomID, userID id.UserID) (err error) {
 	if userString := userID.String(); !glob.Match(userString) {
 		return
 	}
-	_, err = f.Client.BanUser(roomID, &mautrix.ReqBanUser{
-		Reason: "u jus got glob ban",
-		UserID: userID,
-	})
+	err = f.banWithReason(roomID, userID, globBanReason)
 	return
 }
 
@@ -84,12 +92,15 @@ func (f *Fallacy) GlobBanJoinedMembers(glob glob.Glob, roomID id.RoomID) (err er
 		wg.Add(1)
 		go func(u id.UserID) {
 			defer wg.Done()
+			if uString := u.String(); !glob.Match(uString) {
+				return
+			}
 			if isAdmin(&pl, roomID, u) {
-				const adminBanMessage = "cannot ban an admin, try demoting them first..."
+				const adminBanMessage = "Haha, let's /demote him first."
 				f.attemptSendNotice(roomID, adminBanMessage)
 				return
 			}
-			if err := f.GlobBanUser(glob, roomID, u); err != nil {
+			if err := f.banWithReason(roomID, u, globBanReason); err != nil {
 				f.attemptSendNotice(roomID, err.Error())
 			}
 		}(user)
