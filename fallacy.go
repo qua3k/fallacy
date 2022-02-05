@@ -176,19 +176,14 @@ func (f *Fallacy) HandleServerPolicy(_ mautrix.EventSource, ev *event.Event) {
 
 // HandleMember handles `m.room.member` events.
 func (f *Fallacy) HandleMember(_ mautrix.EventSource, ev *event.Event) {
-	sender, room := ev.Sender, ev.RoomID
-	if err := ev.Content.ParseRaw(event.StateMember); err != nil {
-		log.Println("parsing member event failed with:", err)
-		return
-	}
-
 	mem := ev.Content.AsMember()
 	if mem == nil {
+		log.Println("HandleMember failed, got a nil pointer!")
 		return
 	}
 
 	if f.Config.Welcome && isNewJoin(*ev) {
-		display := mem.Displayname
+		display, sender, room := mem.Displayname, ev.Sender, ev.RoomID
 		f.WelcomeMember(display, sender, room)
 	}
 }
