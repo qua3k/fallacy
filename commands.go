@@ -15,7 +15,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type commandListener func(command []string, event event.Event) error
+type commandListener func(command []string, event event.Event)
 
 // Register adds a function to the map.
 func (f *Fallacy) Register(keyword string, callback commandListener) {
@@ -43,9 +43,7 @@ func (f *Fallacy) notifyListeners(command []string, event event.Event) {
 
 		for _, fn := range listen {
 			input := command[2:]
-			if err := fn(input, event); err != nil {
-				log.Println(err)
-			}
+			fn(input, event)
 		}
 		return
 	}
@@ -93,6 +91,10 @@ func (f *Fallacy) isAdmin(roomID id.RoomID, userID id.UserID) bool {
 	return isAdmin(&pl, roomID, userID)
 }
 
+func parseMessage(ev event.Event) (id.RoomID, id.UserID) {
+	return ev.RoomID, ev.Sender
+}
+
 // BanServer bans a server by adding it to the room ACL.
 func (f *Fallacy) BanServer(roomID id.RoomID, homeserverID string) (err error) {
 	acls, err := f.acls(roomID)
@@ -134,6 +136,20 @@ func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 	return
 }
 
+// MuteUsers mutes multiple users of a slice.
+// This could probably be optimized.
+func (f *Fallacy) MuteUsers(users []string, ev event.Event) {
+	if roomID, userID := parseMessage(ev); !f.isAdmin(roomID, userID) {
+		return
+	}
+	for _, u := range users {
+		roomID, userID := ev.RoomID, id.UserID(u)
+		if err := f.MuteUser(roomID, userID); err != nil {
+			log.Println("muting user", u, "failed with", err)
+		}
+	}
+}
+
 // UnmuteUser unmutes a target user in a specified room by utilizing power levels.
 func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 	pl, err := f.powerLevels(roomID)
@@ -151,6 +167,20 @@ func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 	return
 }
 
+// UnmuteUsers mutes multiple users of a slice.
+// This could probably be optimized.
+func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
+	if roomID, userID := parseMessage(ev); !f.isAdmin(roomID, userID) {
+		return
+	}
+	for _, u := range users {
+		roomID, userID := ev.RoomID, id.UserID(u)
+		if err := f.UnmuteUser(roomID, userID); err != nil {
+			log.Println("muting user", u, "failed with", err)
+		}
+	}
+}
+
 // RedactMessage only redacts message events, skipping redaction events, already
 // redacted events, and state events.
 func (f *Fallacy) RedactMessage(ev event.Event) (err error) {
@@ -163,21 +193,28 @@ func (f *Fallacy) RedactMessage(ev event.Event) (err error) {
 	return
 }
 
-func parseMessage(ev event.Event) (id.EventID, id.RoomID, id.UserID) {
-	return ev.ID, ev.RoomID, ev.Sender
-}
-
 // PurgeMessages redacts all message events newer than the specified event ID.
 // It's loosely inspired by Telegram's SophieBot mechanics.
-func (f *Fallacy) PurgeMessages(ev event.Event) (err error) {
+func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
+	roomID, senderID := parseMessage(ev)
+	if !f.isAdmin(roomID, senderID) {
+		return
+	}
+
 	var wg sync.WaitGroup
 	const maxFetchLimit = 2147483647 // the maximum number of messages to fetch.
 
 	redactWait := func(ev event.Event) {
+		wg.Add(1)
 		defer wg.Done()
 		if err := f.RedactMessage(ev); err != nil {
 			log.Println("redacting message failed with error:", err)
 		}
+	}
+
+	relatesTo := ev.Content.AsMessage().RelatesTo
+	if relatesTo == nil {
+		return
 	}
 
 	purgeMessages := func(s []*event.Event) {
@@ -185,31 +222,28 @@ func (f *Fallacy) PurgeMessages(ev event.Event) (err error) {
 			if e == nil {
 				continue
 			}
-			wg.Add(1)
 			go redactWait(*e) // check for races
 		}
 	}
 
 	filter := setupPurgeFilter()
-	eventID, roomID, _ := parseMessage(ev)
-
-	con, err := f.Client.Context(roomID, eventID, &filter, 1)
+	con, err := f.Client.Context(roomID, relatesTo.EventID, &filter, 1)
 	if err != nil {
-		return err
+		log.Println(err)
+		return
 	}
 
 	if con.Event != nil {
-		wg.Add(1)
 		go redactWait(*con.Event)
 	}
 	purgeMessages(con.EventsAfter)
 
 	msg, err := f.Client.Messages(roomID, con.End, "", 'f', &filter, maxFetchLimit)
 	if err != nil {
-		return err
+		log.Println(err)
+		return
 	}
 	purgeMessages(msg.Chunk)
-
 	wg.Wait()
-	return
+		return
 }

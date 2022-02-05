@@ -79,15 +79,16 @@ func NewConfig(firefox bool, name string, rules []string, welcome bool) Config {
 }
 
 // NewFallacy instantiates a new Fallacy struct.
-func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (Fallacy, error) {
+func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (*Fallacy, error) {
 	cli, err := mautrix.NewClient(homeserverURL, id.UserID(userID), accessToken)
 	if err != nil {
-		return Fallacy{}, err
+		return &Fallacy{}, err
 	}
 
-	return Fallacy{
-		Client: cli,
-		Config: config,
+	return &Fallacy{
+		Client:   cli,
+		Config:   config,
+		Handlers: make(map[string][]commandListener),
 	}, nil
 }
 
@@ -113,7 +114,7 @@ func (f *Fallacy) printHelp(roomID id.RoomID) (err error) {
 // SendFallacy sends a random fallacy into the chat. Users of this should
 // explicitly call rand.Seed().
 func (f *Fallacy) SendFallacy(roomID id.RoomID) (err error) {
-	const DefaultStickerSize = 256
+	const defaultStickerSize = 256
 	const length = len(fallacyStickers)
 
 	i := rand.Intn(length)
@@ -121,13 +122,13 @@ func (f *Fallacy) SendFallacy(roomID id.RoomID) (err error) {
 	_, err = f.Client.SendMessageEvent(roomID, event.EventSticker, &event.MessageEventContent{
 		Body: "no firefox here",
 		Info: &event.FileInfo{
-			Height: DefaultStickerSize,
+			Height: defaultStickerSize,
 			ThumbnailInfo: &event.FileInfo{
-				Height: DefaultStickerSize,
-				Width:  DefaultStickerSize,
+				Height: defaultStickerSize,
+				Width:  defaultStickerSize,
 			},
 			ThumbnailURL: url.CUString(),
-			Width:        DefaultStickerSize,
+			Width:        defaultStickerSize,
 		},
 		URL: url.CUString(),
 	})
@@ -189,14 +190,14 @@ func (f *Fallacy) HandleServerPolicy(_ mautrix.EventSource, ev *event.Event) {
 }
 
 // HandleMember handles `m.room.member` events.
-func (f *Fallacy) HandleMember(_ mautrix.EventSource, ev *event.Event) {
+func (f *Fallacy) HandleMember(s mautrix.EventSource, ev *event.Event) {
 	mem := ev.Content.AsMember()
 	if mem == nil {
 		log.Println("HandleMember failed, got a nil pointer!")
 		return
 	}
 
-	if f.Config.Welcome && isNewJoin(*ev) {
+	if f.Config.Welcome && isNewJoin(*ev) && s == mautrix.EventSourceTimeline {
 		display, sender, room := mem.Displayname, ev.Sender, ev.RoomID
 		f.WelcomeMember(display, sender, room)
 	}
@@ -224,7 +225,6 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 		case len(line) < 1, isUnreadable(line):
 			continue
 		}
-
 		fields, prefix := strings.Fields(line), "!"+f.Config.Name
 		if !strings.EqualFold(prefix, fields[0]) {
 			continue

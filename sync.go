@@ -1,0 +1,148 @@
+// Copyright (c) 2020 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package fallacy
+
+import (
+	"fmt"
+	"runtime/debug"
+	"time"
+
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
+)
+
+type FallacySyncer struct {
+	globalListeners []mautrix.EventHandler
+	// listeners want a specific event type
+	listeners map[event.Type][]mautrix.EventHandler
+	// ParseEventContent determines whether or not event content should be parsed before passing to handlers.
+	ParseEventContent bool
+	// ParseErrorHandler is called when event.Content.ParseRaw returns an error.
+	// If it returns false, the event will not be forwarded to listeners.
+	ParseErrorHandler func(ev *event.Event, err error) bool
+	syncListeners     []mautrix.SyncHandler
+}
+
+func NewFallacySyncer() *FallacySyncer {
+	return &FallacySyncer{
+		listeners:         make(map[event.Type][]mautrix.EventHandler),
+		ParseEventContent: true,
+		ParseErrorHandler: func(evt *event.Event, err error) bool {
+			return false
+		},
+	}
+}
+
+// ProcessResponse processes the /sync response in a way suitable for bots. "Suitable for bots" means a stream of
+// unrepeating events. Returns a fatal error if a listener panics.
+func (s *FallacySyncer) ProcessResponse(res *mautrix.RespSync, since string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("ProcessResponse panicked! since=%s panic=%s\n%s", since, r, debug.Stack())
+		}
+	}()
+
+	s.processSyncEvents("", res.Presence.Events, mautrix.EventSourcePresence)
+	s.processSyncEvents("", res.AccountData.Events, mautrix.EventSourceAccountData)
+
+	for roomID, roomData := range res.Rooms.Join {
+		s.processSyncEvents(roomID, roomData.State.Events, mautrix.EventSourceJoin|mautrix.EventSourceState)
+		s.processSyncEvents(roomID, roomData.Timeline.Events, mautrix.EventSourceJoin|mautrix.EventSourceTimeline)
+		s.processSyncEvents(roomID, roomData.Ephemeral.Events, mautrix.EventSourceJoin|mautrix.EventSourceEphemeral)
+		s.processSyncEvents(roomID, roomData.AccountData.Events, mautrix.EventSourceJoin|mautrix.EventSourceAccountData)
+	}
+	return
+}
+
+func (s *FallacySyncer) processSyncEvents(roomID id.RoomID, events []*event.Event, source mautrix.EventSource) {
+	for _, evt := range events {
+		s.processSyncEvent(roomID, evt, source)
+	}
+}
+
+func (s *FallacySyncer) processSyncEvent(roomID id.RoomID, evt *event.Event, source mautrix.EventSource) {
+	evt.RoomID = roomID
+
+	// Ensure the type class is correct. It's safe to mutate the class since the event type is not a pointer.
+	// Listeners are keyed by type structs, which means only the correct class will pass.
+	switch {
+	case evt.StateKey != nil:
+		evt.Type.Class = event.StateEventType
+	case source == mautrix.EventSourcePresence, source&mautrix.EventSourceEphemeral != 0:
+		evt.Type.Class = event.EphemeralEventType
+	case source&mautrix.EventSourceAccountData != 0:
+		evt.Type.Class = event.AccountDataEventType
+	case source == mautrix.EventSourceToDevice:
+		evt.Type.Class = event.ToDeviceEventType
+	default:
+		evt.Type.Class = event.MessageEventType
+	}
+
+	if s.ParseEventContent {
+		err := evt.Content.ParseRaw(evt.Type)
+		if err != nil && !s.ParseErrorHandler(evt, err) {
+			return
+		}
+	}
+
+	s.notifyListeners(source, evt)
+}
+
+func (s *FallacySyncer) notifyListeners(source mautrix.EventSource, evt *event.Event) {
+	listeners, exists := s.listeners[evt.Type]
+	if exists {
+		for _, fn := range listeners {
+			fn(source, evt)
+		}
+	}
+}
+
+// OnEventType allows callers to be notified when there are new events for the given event type.
+// There are no duplicate checks.
+func (s *FallacySyncer) OnEventType(eventType event.Type, callback mautrix.EventHandler) {
+	_, exists := s.listeners[eventType]
+	if !exists {
+		s.listeners[eventType] = []mautrix.EventHandler{}
+	}
+	s.listeners[eventType] = append(s.listeners[eventType], callback)
+}
+
+func (s *FallacySyncer) OnSync(callback mautrix.SyncHandler) {
+	s.syncListeners = append(s.syncListeners, callback)
+}
+
+func (s *FallacySyncer) OnEvent(callback mautrix.EventHandler) {
+	s.globalListeners = append(s.globalListeners, callback)
+}
+
+// OnFailedSync always returns a 10 second wait period between failed /syncs, never a fatal error.
+func (s *FallacySyncer) OnFailedSync(res *mautrix.RespSync, err error) (time.Duration, error) {
+	return 10 * time.Second, nil
+}
+
+func (s *FallacySyncer) GetFilterJSON(userID id.UserID) *mautrix.Filter {
+	return &mautrix.Filter{
+		Room: mautrix.RoomFilter{
+			State: mautrix.FilterPart{
+				LazyLoadMembers: true,
+				Types: []event.Type{
+					event.StateMember,
+					event.StatePolicyServer,
+					event.StatePolicyUser,
+					event.StateTombstone,
+				},
+			},
+			Timeline: mautrix.FilterPart{
+				Limit: 0,
+				Types: []event.Type{
+					event.EventMessage,
+				},
+			},
+		},
+	}
+}

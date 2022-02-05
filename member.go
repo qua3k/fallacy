@@ -52,14 +52,11 @@ func (f *Fallacy) WelcomeMember(displayName string, sender id.UserID, roomID id.
 		return strings.Join([]string{"Welcome", s + "!", "Howdy?"}, " ")
 	}
 
-	plain := welcome(displayName)
-
 	anchor := strings.Join([]string{"<a href='https://matrix.to/#/", senderString, "'>", displayName, "</a>"}, "")
-	format := welcome(anchor)
 	_, err = f.Client.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
-		Body:          plain,
+		Body:          welcome(displayName),
 		Format:        event.FormatHTML,
-		FormattedBody: format,
+		FormattedBody: welcome(anchor),
 		MsgType:       event.MsgNotice,
 	})
 	return

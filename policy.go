@@ -11,6 +11,7 @@ import (
 
 	"github.com/gobwas/glob"
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -60,6 +61,23 @@ func (f *Fallacy) banWithReason(roomID id.RoomID, userID id.UserID, reason strin
 		UserID: userID,
 	})
 	return
+}
+
+// GlobBanSlice glob bans a slice of globs.
+func (f *Fallacy) GlobBanSlice(globs []string, ev event.Event) {
+	roomID, userID := parseMessage(ev)
+	if !f.isAdmin(roomID, userID) {
+		return
+	}
+	for _, u := range globs {
+		glob, err := glob.Compile(u)
+		if err != nil {
+			msg := "compiling glob " + u + " failed!"
+			f.attemptSendNotice(roomID, msg)
+			return
+		}
+		f.GlobBanJoinedMembers(glob, roomID)
+	}
 }
 
 // GlobBanUser bans a single user from the room if it matches the supplied glob,

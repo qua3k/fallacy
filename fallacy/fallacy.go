@@ -1,0 +1,102 @@
+// Copyright 2021 The fallacy Authors. All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+package main
+
+import (
+	"flag"
+	"fmt"
+	"log"
+	"math/rand"
+	"os"
+	"time"
+
+	"github.com/BurntSushi/toml"
+	"github.com/qua3k/fallacy"
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+)
+
+const usage = `Usage:
+	fallacy -c config file`
+
+type tomlStruct struct {
+	Config        fallacy.Config
+	HomeserverUrl string
+	Username      string
+	Password      string
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+func main() {
+
+	var (
+		configFile string = "config.toml"
+		homeserver string = "https://matrix-client.matrix.org"
+		t          tomlStruct
+	)
+
+	flag.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
+	flag.StringVar(&configFile, "c", "", "config from `FILE` (default config.toml)")
+	flag.StringVar(&configFile, "config", "", "config from `FILE` (default config.toml)")
+	flag.Parse()
+
+	if len(os.Args) < 3 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	md, err := toml.DecodeFile(configFile, &t)
+	if err != nil {
+		log.Fatal("decoding config file failed with error:", err)
+	}
+
+	if md.IsDefined("homeserverUrl") {
+		homeserver = t.HomeserverUrl
+	}
+
+	f, err := fallacy.NewFallacy(homeserver, "", "", &t.Config)
+	if err != nil {
+		log.Fatal("creating fallacy struct failed with:", err)
+	}
+
+	_, err = f.Client.Login(&mautrix.ReqLogin{
+		Identifier: mautrix.UserIdentifier{
+			User: t.Username,
+			Type: mautrix.IdentifierTypeUser,
+		},
+		InitialDeviceDisplayName: t.Config.Name,
+		Password:                 t.Password,
+		StoreCredentials:         true,
+		Type:                     "m.login.password",
+	})
+	if err != nil {
+		log.Fatalln("login failed with:", err)
+	}
+
+	syncer := fallacy.NewFallacySyncer()
+	f.Client.Syncer = syncer
+	syncer.OnEventType(event.StatePolicyUser, f.HandleUserPolicy)
+	syncer.OnEventType(event.StateMember, f.HandleMember)
+	syncer.OnEventType(event.EventMessage, f.HandleMessage)
+	syncer.OnEventType(event.StateTombstone, f.HandleTombstone)
+	f.Register("ban", f.GlobBanSlice)
+	f.Register("purge", f.PurgeMessages)
+	f.Register("say", f.SayMessage)
+	f.Register("mute", f.MuteUsers)
+	f.Register("unmute", f.UnmuteUsers)
+
+	old := &mautrix.OldEventIgnorer{
+		UserID: f.Client.UserID,
+	}
+
+	old.Register(syncer)
+
+	if err := f.Client.Sync(); err != nil {
+		fmt.Println("Sync() returned", err)
+	}
+}
