@@ -135,7 +135,7 @@ func (f *Fallacy) BanServerJoinedRooms(homeserverID string) (err error) {
 		go func(r id.RoomID) {
 			defer wg.Done()
 			if err := f.BanServer(r, homeserverID); err != nil {
-				msg := strings.Join([]string{"unable to ban server from room", r.String(), "failed with error:", err.Error()}, " ")
+				msg := strings.Join([]string{"unable to ban", r.String(), "from room,", "failed with error:", err.Error()}, " ")
 				log.Println(msg)
 			}
 		}(room)
