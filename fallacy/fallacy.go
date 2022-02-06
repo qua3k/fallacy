@@ -91,6 +91,10 @@ func main() {
 	f.Register("purge", fallacy.CallbackStruct{
 		Function: f.PurgeMessages,
 	})
+	f.Register("purgeuser", fallacy.CallbackStruct{
+		Function: f.PurgeUser,
+		MinArgs:  1,
+	})
 	f.Register("say", fallacy.CallbackStruct{
 		Function: f.SayMessage,
 		MinArgs:  1,

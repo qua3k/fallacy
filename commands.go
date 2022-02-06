@@ -203,6 +203,43 @@ func (f *Fallacy) RedactMessage(ev event.Event) (err error) {
 	return
 }
 
+func (f *Fallacy) PurgeUser(users []string, ev event.Event) {
+	roomID, senderID := parseMessage(ev)
+	if !f.isAdmin(roomID, senderID) {
+		return
+	}
+
+	var wg sync.WaitGroup
+	redactWait := func(ev event.Event) {
+		wg.Add(1)
+		defer wg.Done()
+		if err := f.RedactMessage(ev); err != nil {
+			log.Println("redacting message failed with error:", err)
+		}
+	}
+
+	const maxFetchLimit = 2147483647
+	filter := setupPurgeFilter()
+	msg, err := f.Client.Messages(roomID, "", "", 'b', &filter, maxFetchLimit)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	for _, e := range msg.Chunk {
+		if e == nil {
+			continue
+		}
+		for _, u := range users {
+			if e.Sender != id.UserID(u) {
+				continue
+			}
+			redactWait(*e)
+		}
+	}
+	wg.Wait()
+}
+
 // PurgeMessages redacts all message events newer than the specified event ID.
 // It's loosely inspired by Telegram's SophieBot mechanics.
 func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
