@@ -220,23 +220,37 @@ func (f *Fallacy) PurgeUser(users []string, ev event.Event) {
 
 	const maxFetchLimit = 2147483647
 	filter := setupPurgeFilter()
-	msg, err := f.Client.Messages(roomID, "", "", 'b', &filter, maxFetchLimit)
-	if err != nil {
-		log.Println(err)
-		return
-	}
 
-	for _, e := range msg.Chunk {
-		if e == nil {
-			continue
+	var (
+		msg *mautrix.RespMessages
+		err error
+	)
+
+	purge := func(token string) {
+		msg, err = f.Client.Messages(roomID, "", "", 'b', &filter, maxFetchLimit)
+		if err != nil {
+			log.Println(err)
+			return
 		}
-		for _, u := range users {
-			if e.Sender != id.UserID(u) {
+
+		for _, e := range msg.Chunk {
+			if e == nil {
 				continue
 			}
-			redactWait(*e)
+			for _, u := range users {
+				if e.Sender != id.UserID(u) {
+					continue
+				}
+				redactWait(*e)
+			}
 		}
 	}
+
+	purge("")
+	for msg.End != "" {
+		purge(msg.End)
+	}
+
 	wg.Wait()
 }
 
