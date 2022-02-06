@@ -142,6 +142,7 @@ func (s *FallacySyncer) GetFilterJSON(userID id.UserID) *mautrix.Filter {
 				Limit: 0,
 				Types: []event.Type{
 					event.EventMessage,
+					event.StateMember,
 				},
 			},
 		},
