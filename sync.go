@@ -53,14 +53,9 @@ func (s *FallacySyncer) ProcessResponse(res *mautrix.RespSync, since string) (er
 		}
 	}
 
-	s.processSyncEvents("", res.Presence.Events, mautrix.EventSourcePresence)
-	s.processSyncEvents("", res.AccountData.Events, mautrix.EventSourceAccountData)
-
 	for roomID, roomData := range res.Rooms.Join {
 		s.processSyncEvents(roomID, roomData.State.Events, mautrix.EventSourceJoin|mautrix.EventSourceState)
 		s.processSyncEvents(roomID, roomData.Timeline.Events, mautrix.EventSourceJoin|mautrix.EventSourceTimeline)
-		s.processSyncEvents(roomID, roomData.Ephemeral.Events, mautrix.EventSourceJoin|mautrix.EventSourceEphemeral)
-		s.processSyncEvents(roomID, roomData.AccountData.Events, mautrix.EventSourceJoin|mautrix.EventSourceAccountData)
 	}
 	return
 }
