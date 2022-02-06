@@ -20,13 +20,13 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-const usage = `# fallacy bot help
-## the following commands are available:
+const usage = `FALLACY BOT HELP:
+the following commands are available
 
-BAN:                        bans your enemies
-MUTE:                       avoid having to hear your friends
-PURGE:                      gets rid of your shitposts
-WELCOME:                    welcomes new members`
+*	BAN (ban <MXID glob>) — bans your enemies. Takes a glob.
+*	MUTE (mute <MXID>) — avoid having to hear your friends.
+*	PURGE — deletes all messages from the message you replied to.
+*	PURGEUSER (purgeuser <MXID>) — purges messages from that user until the beginning of time`
 
 // The fallacy stickers we can use.
 var fallacyStickers = [...]id.ContentURI{
