@@ -8,12 +8,15 @@ import (
 	"errors"
 	"log"
 	"strings"
-	"sync"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
+
+// The max amount of messages to fetch at once—the server will only give about
+// ~1000 events.
+const maxFetchLimit = 1000
 
 type commandListener func(command []string, event event.Event)
 
@@ -150,6 +153,7 @@ func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // This could probably be optimized.
 func (f *Fallacy) MuteUsers(users []string, ev event.Event) {
 	if roomID, userID := parseMessage(ev); !f.isAdmin(roomID, userID) {
+		f.attemptSendNotice(roomID, "shut up ur not admin")
 		return
 	}
 	for _, u := range users {
@@ -181,6 +185,7 @@ func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // This could probably be optimized.
 func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
 	if roomID, userID := parseMessage(ev); !f.isAdmin(roomID, userID) {
+		f.attemptSendNotice(roomID, "shut up ur not admin")
 		return
 	}
 	for _, u := range users {
@@ -194,45 +199,45 @@ func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
 // RedactMessage only redacts message events, skipping redaction events, already
 // redacted events, and state events.
 func (f *Fallacy) RedactMessage(ev event.Event) (err error) {
-	switch {
-	case ev.StateKey == nil,
-		ev.Type != event.EventRedaction,
-		ev.Unsigned.RedactedBecause == nil:
+	if ev.StateKey != nil {
+		return
+	}
+
+	r := ev.Type == event.EventRedaction
+	rb := ev.Unsigned.RedactedBecause == nil
+
+	if !r && rb {
 		_, err = f.Client.RedactEvent(ev.RoomID, ev.ID, mautrix.ReqRedact{})
 	}
 	return
 }
 
+func (f *Fallacy) purgeEvents(evs []*event.Event) {
+	for _, e := range evs {
+		if e == nil {
+			continue
+		}
+		go f.RedactMessage(*e)
+	}
+}
+
 func (f *Fallacy) PurgeUser(users []string, ev event.Event) {
-	roomID, senderID := parseMessage(ev)
+	roomID, senderID := ev.RoomID, ev.Sender
 	if !f.isAdmin(roomID, senderID) {
+		f.attemptSendNotice(roomID, "shut up ur not admin")
 		return
 	}
 
-	var wg sync.WaitGroup
-	redactWait := func(ev event.Event) {
-		wg.Add(1)
-		defer wg.Done()
-		if err := f.RedactMessage(ev); err != nil {
-			log.Println("redacting message failed with error:", err)
-		}
+	msg, err := f.Client.Messages(roomID, "", "", 'b', &purgeFilter, maxFetchLimit)
+	if err != nil {
+		log.Println(err)
+		return
 	}
 
-	const maxFetchLimit = 2147483647
-	filter := setupPurgeFilter()
-
-	var (
-		msg *mautrix.RespMessages
-		err error
-	)
-
-	purge := func(token string) {
-		msg, err = f.Client.Messages(roomID, "", "", 'b', &filter, maxFetchLimit)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
+	var prevEnd string
+	for msg.End != prevEnd {
+		prevEnd = msg.End
+		log.Println(prevEnd)
 		for _, e := range msg.Chunk {
 			if e == nil {
 				continue
@@ -241,71 +246,51 @@ func (f *Fallacy) PurgeUser(users []string, ev event.Event) {
 				if e.Sender != id.UserID(u) {
 					continue
 				}
-				redactWait(*e)
+				go f.RedactMessage(*e)
 			}
 		}
+		msg, err = f.Client.Messages(roomID, "", "", 'b', &purgeFilter, maxFetchLimit)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 	}
-
-	purge("")
-	for msg.End != "" {
-		purge(msg.End)
-	}
-
-	wg.Wait()
 }
 
 // PurgeMessages redacts all message events newer than the specified event ID.
 // It's loosely inspired by Telegram's SophieBot mechanics.
 func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
-	roomID, senderID := parseMessage(ev)
+	roomID, senderID := ev.RoomID, ev.Sender
 	if !f.isAdmin(roomID, senderID) {
+		f.attemptSendNotice(roomID, "shut up ur not admin")
 		return
-	}
-
-	var wg sync.WaitGroup
-	const maxFetchLimit = 2147483647 // the maximum number of messages to fetch.
-
-	redactWait := func(ev event.Event) {
-		wg.Add(1)
-		defer wg.Done()
-		if err := f.RedactMessage(ev); err != nil {
-			log.Println("redacting message failed with error:", err)
-		}
 	}
 
 	relatesTo := ev.Content.AsMessage().RelatesTo
 	if relatesTo == nil {
+		f.attemptSendNotice(roomID, "reply to the message you want to purge")
 		return
 	}
 
-	purgeMessages := func(s []*event.Event) {
-		for _, e := range s {
-			if e == nil {
-				continue
-			}
-			go redactWait(*e) // check for races
-		}
-	}
-
-	filter := setupPurgeFilter()
-	con, err := f.Client.Context(roomID, relatesTo.EventID, &filter, 1)
+	c, err := f.Client.Context(roomID, relatesTo.EventID, &purgeFilter, 1)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	if con.Event != nil {
-		go redactWait(*con.Event)
+	if c.Event == nil {
+		log.Println(err)
+		return
 	}
-	purgeMessages(con.EventsAfter)
+	go f.RedactMessage(*c.Event)
+	go f.purgeEvents(c.EventsAfter)
 
-	msg, err := f.Client.Messages(roomID, con.End, "", 'f', &filter, maxFetchLimit)
+	msg, err := f.Client.Messages(roomID, c.End, "", 'f', &purgeFilter, maxFetchLimit)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	purgeMessages(msg.Chunk)
-	wg.Wait()
+	go f.purgeEvents(msg.Chunk)
 }
 
 func (f *Fallacy) SayMessage(message []string, ev event.Event) {

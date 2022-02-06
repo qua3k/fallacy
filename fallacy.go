@@ -28,26 +28,28 @@ the following commands are available
 *	PURGE — deletes all messages from the message you replied to.
 *	PURGEUSER (purgeuser <MXID>) — purges messages from that user until the beginning of time`
 
+const stickerServer = "spitetech.com"
+
 // The fallacy stickers we can use.
 var fallacyStickers = [...]id.ContentURI{
 	{
-		Homeserver: "spitetech.com",
+		Homeserver: stickerServer,
 		FileID:     "XFgJMFCXulNthUiFUDqoEzuD",
 	},
 	{
-		Homeserver: "spitetech.com",
+		Homeserver: stickerServer,
 		FileID:     "rpDChtvmojnErFdIZgfKktJW",
 	},
 	{
-		Homeserver: "spitetech.com",
+		Homeserver: stickerServer,
 		FileID:     "KLJKMzTyTYKiHdHKSYKtNVXb",
 	},
 	{
-		Homeserver: "spitetech.com",
+		Homeserver: stickerServer,
 		FileID:     "EdDSfNluLxYOfJmFKTDSXmaG",
 	},
 	{
-		Homeserver: "spitetech.com",
+		Homeserver: stickerServer,
 		FileID:     "ziTJliFmgUpxCTXgyjSMvNKA",
 	},
 }
@@ -92,15 +94,11 @@ func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (*Fal
 	}, nil
 }
 
-// unreadable are the unreadable constants.
-var unreadable = [2]string{"*", ">"}
-
 // isUnreadable returns whether a line is prefixed with an unreadable constant.
 func isUnreadable(line string) bool {
-	for _, s := range unreadable {
-		if strings.HasPrefix(line, s) {
-			return true
-		}
+	switch {
+	case strings.HasPrefix(line, "*"), strings.HasPrefix(line, ">"):
+		return true
 	}
 	return false
 }
@@ -162,7 +160,7 @@ func (f *Fallacy) HandleUserPolicy(_ mautrix.EventSource, ev *event.Event) {
 			return
 		}
 		if err := f.GlobBanJoinedRooms(g); err != nil {
-			log.Println()
+			log.Println(err)
 		}
 	}
 }
@@ -187,7 +185,9 @@ func (f *Fallacy) HandleServerPolicy(_ mautrix.EventSource, ev *event.Event) {
 			log.Printf("asserting `entity` key failed! expected string, got: %T\n", e)
 			return
 		}
-		f.BanServerJoinedRooms(e)
+		if err := f.BanServerJoinedRooms(e); err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -201,7 +201,9 @@ func (f *Fallacy) HandleMember(s mautrix.EventSource, ev *event.Event) {
 
 	if f.Config.Welcome && isNewJoin(*ev) && s == mautrix.EventSourceTimeline {
 		display, sender, room := mem.Displayname, ev.Sender, ev.RoomID
-		f.WelcomeMember(display, sender, room)
+		if err := f.WelcomeMember(display, sender, room); err != nil {
+			log.Println(err)
+		}
 	}
 }
 

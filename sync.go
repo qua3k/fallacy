@@ -98,7 +98,7 @@ func (s *FallacySyncer) notifyListeners(source mautrix.EventSource, evt *event.E
 	listeners, exists := s.listeners[evt.Type]
 	if exists {
 		for _, fn := range listeners {
-			fn(source, evt)
+			go fn(source, evt)
 		}
 	}
 }
@@ -132,7 +132,6 @@ func (s *FallacySyncer) GetFilterJSON(userID id.UserID) *mautrix.Filter {
 			State: mautrix.FilterPart{
 				LazyLoadMembers: true,
 				Types: []event.Type{
-					event.StateMember,
 					event.StatePolicyServer,
 					event.StatePolicyUser,
 					event.StateTombstone,

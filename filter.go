@@ -9,30 +9,26 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-// setupPurgeFilter returns a RoomEventFilter adequate for fetching the events
-// necessary to purge messages.
-func setupPurgeFilter() mautrix.FilterPart {
-	return mautrix.FilterPart{
-		LazyLoadMembers: true,
-		NotTypes: []event.Type{
-			event.EventRedaction,
-			// avoid fetching state events
-			event.StateAliases,
-			event.StateBridge,
-			event.StateCanonicalAlias,
-			event.StateCreate,
-			event.StateEncryption,
-			event.StateHalfShotBridge,
-			event.StateHistoryVisibility,
-			event.StateJoinRules,
-			event.StateMember,
-			event.StatePinnedEvents,
-			event.StatePowerLevels,
-			event.StateRoomAvatar,
-			event.StateRoomName,
-			event.StateSpaceChild,
-			event.StateTombstone,
-			event.StateTopic,
-		},
-	}
+var purgeFilter = mautrix.FilterPart{
+	LazyLoadMembers: true,
+	NotTypes: []event.Type{
+		event.EventRedaction,
+		// avoid fetching state events
+		event.StateAliases,
+		event.StateBridge,
+		event.StateCanonicalAlias,
+		event.StateCreate,
+		event.StateEncryption,
+		event.StateHalfShotBridge,
+		event.StateHistoryVisibility,
+		event.StateJoinRules,
+		event.StateMember,
+		event.StatePinnedEvents,
+		event.StatePowerLevels,
+		event.StateRoomAvatar,
+		event.StateRoomName,
+		event.StateSpaceChild,
+		event.StateTombstone,
+		event.StateTopic,
+	},
 }

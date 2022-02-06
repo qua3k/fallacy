@@ -67,6 +67,7 @@ func (f *Fallacy) banWithReason(roomID id.RoomID, userID id.UserID, reason strin
 func (f *Fallacy) GlobBanSlice(globs []string, ev event.Event) {
 	roomID, userID := parseMessage(ev)
 	if !f.isAdmin(roomID, userID) {
+		f.attemptSendNotice(roomID, "shut up ur not admin")
 		return
 	}
 	for _, u := range globs {
