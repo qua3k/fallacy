@@ -199,7 +199,8 @@ func (f *Fallacy) HandleMember(s mautrix.EventSource, ev *event.Event) {
 		return
 	}
 
-	if f.Config.Welcome && isNewJoin(*ev) && s == mautrix.EventSourceTimeline {
+	tl := s & mautrix.EventSourceTimeline
+	if f.Config.Welcome && isNewJoin(*ev) && tl > 0 {
 		display, sender, room := mem.Displayname, ev.Sender, ev.RoomID
 		if err := f.WelcomeMember(display, sender, room); err != nil {
 			log.Println(err)
