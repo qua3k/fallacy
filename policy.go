@@ -7,7 +7,6 @@ package fallacy
 import (
 	"log"
 	"strings"
-	"sync"
 
 	"github.com/gobwas/glob"
 	"maunium.net/go/mautrix"
@@ -106,11 +105,8 @@ func (f *Fallacy) GlobBanJoinedMembers(glob glob.Glob, roomID id.RoomID) (err er
 		return
 	}
 
-	var wg sync.WaitGroup
 	for user := range jm.Joined {
-		wg.Add(1)
 		go func(u id.UserID) {
-			defer wg.Done()
 			if uString := u.String(); !glob.Match(uString) {
 				return
 			}
@@ -124,7 +120,6 @@ func (f *Fallacy) GlobBanJoinedMembers(glob glob.Glob, roomID id.RoomID) (err er
 			}
 		}(user)
 	}
-	wg.Wait()
 	return
 }
 
@@ -136,17 +131,13 @@ func (f *Fallacy) GlobBanJoinedRooms(glob glob.Glob) (err error) {
 		return
 	}
 
-	var wg sync.WaitGroup
 	for _, room := range jr.JoinedRooms {
-		wg.Add(1)
 		go func(r id.RoomID) {
-			defer wg.Done()
 			if err := f.GlobBanJoinedMembers(glob, r); err != nil {
 				log.Println(err)
 			}
 		}(room)
 	}
-	wg.Wait()
 	return
 }
 
@@ -159,17 +150,13 @@ func (f *Fallacy) BanServerJoinedRooms(homeserverID string) (err error) {
 		return
 	}
 
-	var wg sync.WaitGroup
 	for _, room := range jr.JoinedRooms {
-		wg.Add(1)
 		go func(r id.RoomID) {
-			defer wg.Done()
 			if err := f.BanServer(r, homeserverID); err != nil {
 				msg := strings.Join([]string{"unable to ban", r.String(), "from room,", "failed with error:", err.Error()}, " ")
 				log.Println(msg)
 			}
 		}(room)
 	}
-	wg.Wait()
 	return
 }
