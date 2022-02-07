@@ -197,6 +197,28 @@ func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
 	}
 }
 
+// PinMessage pins the replied-to event.
+func (f *Fallacy) PinMessage(_ []string, ev event.Event) {
+	roomID, senderID := ev.RoomID, ev.Sender
+	if !f.isAdmin(roomID, senderID) {
+		f.attemptSendNotice(roomID, adminMessage)
+		return
+	}
+
+	relatesTo := ev.Content.AsMessage().RelatesTo
+	if relatesTo == nil {
+		f.attemptSendNotice(roomID, "reply to the message you want to purge")
+		return
+	}
+
+	p := event.PinnedEventsEventContent{}
+	// Avoid handling this error. The pinned event may not exist.
+	f.Client.StateEvent(roomID, event.StatePinnedEvents, "", &p)
+
+	p.Pinned = append(p.Pinned, relatesTo.EventID)
+	f.Client.SendStateEvent(ev.RoomID, event.StatePinnedEvents, "", &p)
+}
+
 // RedactMessage only redacts message events, skipping redaction events, already
 // redacted events, and state events.
 func (f *Fallacy) RedactMessage(ev event.Event) (err error) {

@@ -88,6 +88,9 @@ func main() {
 		Function: f.GlobBanSlice,
 		MinArgs:  1,
 	})
+	f.Register("pin", fallacy.CallbackStruct{
+		Function: f.PinMessage,
+	})
 	f.Register("purge", fallacy.CallbackStruct{
 		Function: f.PurgeMessages,
 	})
