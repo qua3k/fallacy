@@ -17,6 +17,7 @@ import (
 // The max amount of messages to fetch at once—the server will only give about
 // ~1000 events.
 const maxFetchLimit = 1000
+const adminMessage = "shut up ur not admin"
 
 type commandListener func(command []string, event event.Event)
 
@@ -153,7 +154,7 @@ func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // This could probably be optimized.
 func (f *Fallacy) MuteUsers(users []string, ev event.Event) {
 	if roomID, userID := parseMessage(ev); !f.isAdmin(roomID, userID) {
-		f.attemptSendNotice(roomID, "shut up ur not admin")
+		f.attemptSendNotice(roomID, adminMessage)
 		return
 	}
 	for _, u := range users {
@@ -185,7 +186,7 @@ func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // This could probably be optimized.
 func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
 	if roomID, userID := parseMessage(ev); !f.isAdmin(roomID, userID) {
-		f.attemptSendNotice(roomID, "shut up ur not admin")
+		f.attemptSendNotice(roomID, adminMessage)
 		return
 	}
 	for _, u := range users {
@@ -221,10 +222,19 @@ func (f *Fallacy) purgeEvents(evs []*event.Event) {
 	}
 }
 
-func (f *Fallacy) PurgeUser(users []string, ev event.Event) {
+func (f *Fallacy) redactUsers(users []string, ev event.Event) {
+	for _, u := range users {
+		if id.UserID(u) != ev.Sender {
+			continue
+		}
+		go f.RedactMessage(ev)
+	}
+}
+
+func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 	roomID, senderID := ev.RoomID, ev.Sender
 	if !f.isAdmin(roomID, senderID) {
-		f.attemptSendNotice(roomID, "shut up ur not admin")
+		f.attemptSendNotice(roomID, adminMessage)
 		return
 	}
 
@@ -241,12 +251,7 @@ func (f *Fallacy) PurgeUser(users []string, ev event.Event) {
 			if e == nil {
 				continue
 			}
-			for _, u := range users {
-				if e.Sender != id.UserID(u) {
-					continue
-				}
-				go f.RedactMessage(*e)
-			}
+			go f.redactUsers(users, *e)
 		}
 		msg, err = f.Client.Messages(roomID, "", "", 'b', &purgeFilter, maxFetchLimit)
 		if err != nil {
@@ -261,7 +266,7 @@ func (f *Fallacy) PurgeUser(users []string, ev event.Event) {
 func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	roomID, senderID := ev.RoomID, ev.Sender
 	if !f.isAdmin(roomID, senderID) {
-		f.attemptSendNotice(roomID, "shut up ur not admin")
+		f.attemptSendNotice(roomID, adminMessage)
 		return
 	}
 
@@ -295,7 +300,7 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 func (f *Fallacy) SayMessage(message []string, ev event.Event) {
 	roomID, userID := parseMessage(ev)
 	if !f.isAdmin(roomID, userID) {
-		f.attemptSendNotice(roomID, "shut up ur not admin")
+		f.attemptSendNotice(roomID, adminMessage)
 		return
 	}
 	msg := strings.Join(message, " ")

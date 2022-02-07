@@ -92,7 +92,7 @@ func main() {
 		Function: f.PurgeMessages,
 	})
 	f.Register("purgeuser", fallacy.CallbackStruct{
-		Function: f.PurgeUser,
+		Function: f.PurgeUsers,
 		MinArgs:  1,
 	})
 	f.Register("say", fallacy.CallbackStruct{
