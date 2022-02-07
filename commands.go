@@ -237,7 +237,6 @@ func (f *Fallacy) PurgeUser(users []string, ev event.Event) {
 	var prevEnd string
 	for msg.End != prevEnd {
 		prevEnd = msg.End
-		log.Println(prevEnd)
 		for _, e := range msg.Chunk {
 			if e == nil {
 				continue
