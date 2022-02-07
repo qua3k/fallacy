@@ -231,6 +231,7 @@ func (f *Fallacy) redactUsers(users []string, ev event.Event) {
 	}
 }
 
+// PurgeUsers redacts all messages sent by the specified users.
 func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 	roomID, senderID := ev.RoomID, ev.Sender
 	if !f.isAdmin(roomID, senderID) {
@@ -238,7 +239,8 @@ func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 		return
 	}
 
-	msg, err := f.Client.Messages(roomID, "", "", 'b', &purgeFilter, maxFetchLimit)
+	filter := purgeUserFilter(users)
+	msg, err := f.Client.Messages(roomID, "", "", 'b', &filter, maxFetchLimit)
 	if err != nil {
 		log.Println(err)
 		return
@@ -253,7 +255,7 @@ func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 			}
 			go f.redactUsers(users, *e)
 		}
-		msg, err = f.Client.Messages(roomID, msg.End, "", 'b', &purgeFilter, maxFetchLimit)
+		msg, err = f.Client.Messages(roomID, msg.End, "", 'b', &filter, maxFetchLimit)
 		if err != nil {
 			log.Println(err)
 			return

@@ -129,19 +129,13 @@ func (s *FallacySyncer) OnFailedSync(res *mautrix.RespSync, err error) (time.Dur
 func (s *FallacySyncer) GetFilterJSON(userID id.UserID) *mautrix.Filter {
 	return &mautrix.Filter{
 		Room: mautrix.RoomFilter{
-			State: mautrix.FilterPart{
-				LazyLoadMembers: true,
-				Types: []event.Type{
-					event.StatePolicyServer,
-					event.StatePolicyUser,
-					event.StateTombstone,
-				},
-			},
 			Timeline: mautrix.FilterPart{
-				Limit: 0,
 				Types: []event.Type{
 					event.EventMessage,
 					event.StateMember,
+					event.StatePolicyServer,
+					event.StatePolicyUser,
+					event.StateTombstone,
 				},
 			},
 		},
