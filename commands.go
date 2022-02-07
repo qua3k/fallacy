@@ -204,10 +204,7 @@ func (f *Fallacy) RedactMessage(ev event.Event) (err error) {
 		return
 	}
 
-	r := ev.Type == event.EventRedaction
-	rb := ev.Unsigned.RedactedBecause == nil
-
-	if !r && rb {
+	if ev.Type != event.EventRedaction && ev.Unsigned.RedactedBecause == nil {
 		_, err = f.Client.RedactEvent(ev.RoomID, ev.ID, mautrix.ReqRedact{})
 	}
 	return
