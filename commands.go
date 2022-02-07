@@ -283,7 +283,7 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	}
 
 	if c.Event == nil {
-		log.Println(err)
+		log.Println("event is nil (should this happen)?")
 		return
 	}
 	go f.RedactMessage(*c.Event)
