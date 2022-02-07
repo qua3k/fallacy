@@ -230,6 +230,14 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 		case len(line) < 1, isUnreadable(line):
 			continue
 		}
+
+		if f.Config.Firefox && strings.Contains(line, "firefox") {
+			if err := f.SendFallacy(ev.RoomID); err != nil {
+				log.Println(err)
+			}
+			continue
+		}
+
 		fields, prefix := strings.Fields(line), "!"+f.Config.Name
 		if !strings.EqualFold(prefix, fields[0]) {
 			continue
