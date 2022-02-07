@@ -253,7 +253,7 @@ func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 			}
 			go f.redactUsers(users, *e)
 		}
-		msg, err = f.Client.Messages(roomID, "", "", 'b', &purgeFilter, maxFetchLimit)
+		msg, err = f.Client.Messages(roomID, msg.End, "", 'b', &purgeFilter, maxFetchLimit)
 		if err != nil {
 			log.Println(err)
 			return
