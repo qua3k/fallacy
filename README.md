@@ -4,36 +4,41 @@
 
 "fallacy bot good" – a logician
 
-## what this is
+## About
 
-this is bot i think it better than mjolnir
+Fallacy is a high performance Matrix moderation bot. Born out of the
+deficiencies of other matrix bots, it aims to be simple, fast, and efficient.
 
-## features
+Much of the design was inspired by [@rSophieBot](https://t.me/rSophieBot).
+
+Currently, it is dependent on rate-limits being disabled, but it is possible to
+rework many of the commands to cope with the rate limits.
+
+## Features
 
 *   written in go which is supposed to be good
-*   abuses goroutines to hog your system's resources
+    *   abuses goroutines to hog your system's resources
 *   follows you everywhere you go (room upgrades)
+*   actually thanks users for coming (welcome messages)
+*   is prejudiced against firefox users
+*   (in progress) mjolnir banlist support
+
+## Commands
+
 *   tells users you dont want to hear them (mute users)
 *   removes your shitposts (purges messages)
-*   actually thanks users for coming (welcome messages)
+*   lets everyone know how cool you are (pin messages)
+*   sprouts fallacies, if you choose to (say messages)
+*   removes your enemies (bans users)
 
 ## todo
 
 *   automatically unmute users after a certain period of time
+*   kicking/banning certain display and usernames
+*   explore banning new users from a certain server for a specific period
+*   promote/demote users
 
 ## maybe
 
-*   restricting new users from a specific server for optional amount of time
-*   mjolnir banlist support
-*   pin messages via reply
 *   slow mode via redacting messages if last one was sent in x time
     *   must evaluate the feasibility of this
-*   adjust power levels
-    *   promote/demote users
-*   banning w/ reason + post to ban list
-*   kicking w/ reason
-*   kicking/banning certain display/usernames
-*   emit m.room.retentions
-
-
-warnings are useless and i dont want them

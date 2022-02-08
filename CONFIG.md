@@ -2,22 +2,71 @@
 
 This is the configuration for the fallacy bot.
 
+## Username
+
+The MXID of the client.
+
 ```toml
-# The username and password used to login to the account
 username = "@example:example.com"
+```
+
+## Password
+
+The password of the user.
+
+```toml
 password = "password"
-# the homeserver URL. If unspecified, is matrix-client.matrix.org
-homeserverurl = "https://example.com" 
+```
 
+## Homeserver
 
-# Optional configuration, defaults to uninitialized values 
+The homeserver URL. If unspecified, defaults to matrix-client.matrix.org.
+
+```
+homeserverUrl = "https://example.com" 
+```
+
+## Additional Configuration
+
+### Firefox Harassment
+
+Choose to be extremely prejudiced against Firefox users.
+
+```toml
 [Config]
-# choice to harass firefox users
-firefox = true
+firefox = true # you should probably choose this option
+```
 
-# the client display name used for calling the bot, i.e., !fallacy
+### Client Name
+
+The client display name in sessions. Also used for summoning the bot, i.e.,
+!fallacy.
+
+```toml
+[Config]
 name = "fallacy"
-# whether to welcome new users.
+```
+
+### Welcome Messages
+
+Whether to welcome new users.
+
+```toml
+[Config]
 welcome = true
 ```
 
+## Example Configuration
+
+An example configuration.
+
+```toml
+homeserverUrl = "https://example.com"
+username = "@fallacy:example.com
+password = "ad_hominem"
+
+[Config]
+firefox = true
+name = "fallacy"
+welcome = true
+```
