@@ -31,14 +31,14 @@ rework many of the commands to cope with the rate limits.
 *   sprouts fallacies, if you choose to (say messages)
 *   removes your enemies (bans users)
 
-## todo
+## To-do
 
 *   automatically unmute users after a certain period of time
 *   kicking/banning certain display and usernames
 *   explore banning new users from a certain server for a specific period
 *   promote/demote users
 
-## maybe
+## Future
 
 *   slow mode via redacting messages if last one was sent in x time
     *   must evaluate the feasibility of this

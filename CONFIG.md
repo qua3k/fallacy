@@ -62,7 +62,7 @@ An example configuration.
 
 ```toml
 homeserverUrl = "https://example.com"
-username = "@fallacy:example.com
+username = "@fallacy:example.com"
 password = "ad_hominem"
 
 [Config]
