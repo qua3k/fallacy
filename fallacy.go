@@ -20,13 +20,16 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-const usage = `FALLACY BOT HELP:
+const usage = `fallacy bot help:
 the following commands are available
 
-*	BAN (ban <MXID glob>) — bans your enemies. Takes a glob.
-*	MUTE (mute <MXID>) — avoid having to hear your friends.
-*	PURGE — deletes all messages from the message you replied to.
-*	PURGEUSER (purgeuser <MXID>) — purges messages from that user until the beginning of time`
+*	ban (ban <glob>) — bans your enemies. Takes a glob.
+*	mute (mute <mxid>) — avoid having to hear your friends.
+*	pin — pins the message you replied to.
+*	purge — deletes all messages from the message you replied to.
+*	purgeuser (purgeuser <mxid>) — purges messages from that user until the beginning of time
+*	say (say <message>) — let the bot say something.
+*	unmute (unmute <mxid>) — allow a peasant to speak`
 
 const stickerServer = "spitetech.com"
 
@@ -67,7 +70,7 @@ type Config struct {
 type Fallacy struct {
 	Client   *mautrix.Client
 	Config   *Config
-	Handlers map[string][]CallbackStruct
+	Handlers map[string][]Callback
 }
 
 // NewConfig instantiates a new Config struct.
@@ -90,7 +93,7 @@ func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (*Fal
 	return &Fallacy{
 		Client:   cli,
 		Config:   config,
-		Handlers: make(map[string][]CallbackStruct),
+		Handlers: make(map[string][]Callback),
 	}, nil
 }
 

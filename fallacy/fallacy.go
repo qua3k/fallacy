@@ -84,29 +84,29 @@ func main() {
 	syncer.OnEventType(event.StateMember, f.HandleMember)
 	syncer.OnEventType(event.EventMessage, f.HandleMessage)
 	syncer.OnEventType(event.StateTombstone, f.HandleTombstone)
-	f.Register("ban", fallacy.CallbackStruct{
+	f.Register("ban", fallacy.Callback{
 		Function: f.GlobBanSlice,
 		MinArgs:  1,
 	})
-	f.Register("pin", fallacy.CallbackStruct{
-		Function: f.PinMessage,
-	})
-	f.Register("purge", fallacy.CallbackStruct{
-		Function: f.PurgeMessages,
-	})
-	f.Register("purgeuser", fallacy.CallbackStruct{
-		Function: f.PurgeUsers,
-		MinArgs:  1,
-	})
-	f.Register("say", fallacy.CallbackStruct{
-		Function: f.SayMessage,
-		MinArgs:  1,
-	})
-	f.Register("mute", fallacy.CallbackStruct{
+	f.Register("mute", fallacy.Callback{
 		Function: f.MuteUsers,
 		MinArgs:  1,
 	})
-	f.Register("unmute", fallacy.CallbackStruct{
+	f.Register("pin", fallacy.Callback{
+		Function: f.PinMessage,
+	})
+	f.Register("purge", fallacy.Callback{
+		Function: f.PurgeMessages,
+	})
+	f.Register("purgeuser", fallacy.Callback{
+		Function: f.PurgeUsers,
+		MinArgs:  1,
+	})
+	f.Register("say", fallacy.Callback{
+		Function: f.SayMessage,
+		MinArgs:  1,
+	})
+	f.Register("unmute", fallacy.Callback{
 		Function: f.MuteUsers,
 		MinArgs:  1,
 	})

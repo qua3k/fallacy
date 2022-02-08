@@ -18,19 +18,20 @@ import (
 // ~1000 events.
 const maxFetchLimit = 1000
 const adminMessage = "shut up ur not admin"
+const noPermsMessage = "Fallacy does not have sufficient permission to perform that action!"
 
 type commandListener func(command []string, event event.Event)
 
-type CallbackStruct struct {
+type Callback struct {
 	Function commandListener
 	MinArgs  int
 }
 
 // Register adds a function to the map.
-func (f *Fallacy) Register(keyword string, callback CallbackStruct) {
+func (f *Fallacy) Register(keyword string, callback Callback) {
 	_, ok := f.Handlers[keyword]
 	if !ok {
-		f.Handlers[keyword] = []CallbackStruct{}
+		f.Handlers[keyword] = []Callback{}
 	}
 	f.Handlers[keyword] = append(f.Handlers[keyword], callback)
 }
@@ -39,8 +40,13 @@ func (f *Fallacy) Register(keyword string, callback CallbackStruct) {
 func (f *Fallacy) notifyListeners(command []string, event event.Event) {
 	roomID := event.RoomID
 
-	if len := len(command); len < 2 {
+	if l := len(command); l < 2 {
 		f.printHelp(roomID)
+		return
+	}
+
+	if !f.isAdmin(roomID, event.Sender) {
+		f.attemptSendNotice(roomID, adminMessage)
 		return
 	}
 
@@ -105,12 +111,27 @@ func (f *Fallacy) isAdmin(roomID id.RoomID, userID id.UserID) bool {
 	return isAdmin(&pl, roomID, userID)
 }
 
-func parseMessage(ev event.Event) (id.RoomID, id.UserID) {
-	return ev.RoomID, ev.Sender
+// Checks whether the fallacy bot has perms.
+func (f *Fallacy) hasPerms(roomID id.RoomID, event event.Type) bool {
+	pl, err := f.powerLevels(roomID)
+	if err != nil {
+		log.Println("fetching power levels event failed!")
+		return false
+	}
+
+	if pl.GetEventLevel(event) > pl.GetUserLevel(f.Client.UserID) {
+		return false
+	}
+	return true
 }
 
 // BanServer bans a server by adding it to the room ACL.
 func (f *Fallacy) BanServer(roomID id.RoomID, homeserverID string) (err error) {
+	if !f.hasPerms(roomID, event.StateServerACL) {
+		f.attemptSendNotice(roomID, noPermsMessage)
+		return
+	}
+
 	acls, err := f.acls(roomID)
 	if err != nil {
 		return
@@ -153,13 +174,13 @@ func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // MuteUsers mutes multiple users of a slice.
 // This could probably be optimized.
 func (f *Fallacy) MuteUsers(users []string, ev event.Event) {
-	if roomID, userID := parseMessage(ev); !f.isAdmin(roomID, userID) {
-		f.attemptSendNotice(roomID, adminMessage)
+	if !f.hasPerms(ev.RoomID, event.StateServerACL) {
+		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
+
 	for _, u := range users {
-		roomID, userID := ev.RoomID, id.UserID(u)
-		if err := f.MuteUser(roomID, userID); err != nil {
+		if err := f.MuteUser(ev.RoomID, id.UserID(u)); err != nil {
 			log.Println("muting user", u, "failed with", err)
 		}
 	}
@@ -185,35 +206,34 @@ func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // UnmuteUsers mutes multiple users of a slice.
 // This could probably be optimized.
 func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
-	if roomID, userID := parseMessage(ev); !f.isAdmin(roomID, userID) {
-		f.attemptSendNotice(roomID, adminMessage)
+	if !f.hasPerms(ev.RoomID, event.StateServerACL) {
+		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
+
 	for _, u := range users {
-		roomID, userID := ev.RoomID, id.UserID(u)
-		if err := f.UnmuteUser(roomID, userID); err != nil {
-			log.Println("muting user", u, "failed with", err)
+		if err := f.UnmuteUser(ev.RoomID, id.UserID(u)); err != nil {
+			log.Println("unmuting user", u, "failed with", err)
 		}
 	}
 }
 
 // PinMessage pins the replied-to event.
 func (f *Fallacy) PinMessage(_ []string, ev event.Event) {
-	roomID, senderID := ev.RoomID, ev.Sender
-	if !f.isAdmin(roomID, senderID) {
-		f.attemptSendNotice(roomID, adminMessage)
+	if !f.hasPerms(ev.RoomID, event.StatePinnedEvents) {
+		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
 
 	relatesTo := ev.Content.AsMessage().RelatesTo
 	if relatesTo == nil {
-		f.attemptSendNotice(roomID, "reply to the message you want to purge")
+		f.attemptSendNotice(ev.RoomID, "Reply to the message you want to pin!")
 		return
 	}
 
 	p := event.PinnedEventsEventContent{}
 	// Avoid handling this error. The pinned event may not exist.
-	f.Client.StateEvent(roomID, event.StatePinnedEvents, "", &p)
+	f.Client.StateEvent(ev.RoomID, event.StatePinnedEvents, "", &p)
 
 	p.Pinned = append(p.Pinned, relatesTo.EventID)
 	f.Client.SendStateEvent(ev.RoomID, event.StatePinnedEvents, "", &p)
@@ -252,14 +272,13 @@ func (f *Fallacy) redactUsers(users []string, ev event.Event) {
 
 // PurgeUsers redacts all messages sent by the specified users.
 func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
-	roomID, senderID := ev.RoomID, ev.Sender
-	if !f.isAdmin(roomID, senderID) {
-		f.attemptSendNotice(roomID, adminMessage)
+	if !f.hasPerms(ev.RoomID, event.EventRedaction) {
+		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
 
 	filter := purgeUserFilter(users)
-	msg, err := f.Client.Messages(roomID, "", "", 'b', &filter, maxFetchLimit)
+	msg, err := f.Client.Messages(ev.RoomID, "", "", 'b', &filter, maxFetchLimit)
 	if err != nil {
 		log.Println(err)
 		return
@@ -274,7 +293,7 @@ func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 			}
 			go f.redactUsers(users, *e)
 		}
-		msg, err = f.Client.Messages(roomID, msg.End, "", 'b', &filter, maxFetchLimit)
+		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, maxFetchLimit)
 		if err != nil {
 			log.Println(err)
 			return
@@ -285,19 +304,18 @@ func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 // PurgeMessages redacts all message events newer than the specified event ID.
 // It's loosely inspired by Telegram's SophieBot mechanics.
 func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
-	roomID, senderID := ev.RoomID, ev.Sender
-	if !f.isAdmin(roomID, senderID) {
-		f.attemptSendNotice(roomID, adminMessage)
+	if !f.hasPerms(ev.RoomID, event.EventRedaction) {
+		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
 
 	relatesTo := ev.Content.AsMessage().RelatesTo
 	if relatesTo == nil {
-		f.attemptSendNotice(roomID, "reply to the message you want to purge")
+		f.attemptSendNotice(ev.RoomID, "Reply to the message you want to purge!")
 		return
 	}
 
-	c, err := f.Client.Context(roomID, relatesTo.EventID, &purgeFilter, 1)
+	c, err := f.Client.Context(ev.RoomID, relatesTo.EventID, &purgeFilter, 1)
 	if err != nil {
 		log.Println(err)
 		return
@@ -310,7 +328,7 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	go f.RedactMessage(*c.Event)
 	go f.purgeEvents(c.EventsAfter)
 
-	msg, err := f.Client.Messages(roomID, c.End, "", 'f', &purgeFilter, maxFetchLimit)
+	msg, err := f.Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, maxFetchLimit)
 	if err != nil {
 		log.Println(err)
 		return
@@ -318,12 +336,8 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	go f.purgeEvents(msg.Chunk)
 }
 
+// SayMessage sends a message into the chat.
 func (f *Fallacy) SayMessage(message []string, ev event.Event) {
-	roomID, userID := parseMessage(ev)
-	if !f.isAdmin(roomID, userID) {
-		f.attemptSendNotice(roomID, adminMessage)
-		return
-	}
 	msg := strings.Join(message, " ")
-	f.attemptSendNotice(roomID, msg)
+	f.attemptSendNotice(ev.RoomID, msg)
 }

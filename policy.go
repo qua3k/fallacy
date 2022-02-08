@@ -64,19 +64,19 @@ func (f *Fallacy) banWithReason(roomID id.RoomID, userID id.UserID, reason strin
 
 // GlobBanSlice glob bans a slice of globs.
 func (f *Fallacy) GlobBanSlice(globs []string, ev event.Event) {
-	roomID, userID := parseMessage(ev)
-	if !f.isAdmin(roomID, userID) {
-		f.attemptSendNotice(roomID, adminMessage)
+	if !f.hasPerms(ev.RoomID, event.StateMember) {
+		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
+
 	for _, u := range globs {
 		glob, err := glob.Compile(u)
 		if err != nil {
 			msg := "compiling glob " + u + " failed!"
-			f.attemptSendNotice(roomID, msg)
+			f.attemptSendNotice(ev.RoomID, msg)
 			return
 		}
-		f.GlobBanJoinedMembers(glob, roomID)
+		f.GlobBanJoinedMembers(glob, ev.RoomID)
 	}
 }
 
@@ -90,10 +90,11 @@ func (f *Fallacy) GlobBanUser(glob glob.Glob, roomID id.RoomID, userID id.UserID
 	return
 }
 
-// GlobBanJoinedMembers utilizes the power of glob to ban all users matching
-// the glob from the room, returning an error if unsuccessful. This does not
-// attempt to ban admins, sending a notice when an attempt is made to ban an
-// admin or banning a user fails.
+// GlobBanJoinedMembers bans all users matching the glob from the room,
+// returning an error if unsuccessful.
+//
+// This does not attempt to ban admins, sending a notice when an attempt is made
+// to ban an admin or banning a user fails.
 func (f *Fallacy) GlobBanJoinedMembers(glob glob.Glob, roomID id.RoomID) (err error) {
 	jm, err := f.Client.JoinedMembers(roomID)
 	if err != nil {
