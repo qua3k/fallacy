@@ -27,9 +27,9 @@ the following commands are available
 *	mute (mute <mxid>) — avoid having to hear your friends.
 *	pin — pins the message you replied to.
 *	purge — deletes all messages from the message you replied to.
-*	purgeuser (purgeuser <mxid>) — purges messages from that user until the beginning of time
+*	purgeuser (purgeuser <mxid>) — purges messages from that user until the beginning of time.
 *	say (say <message>) — let the bot say something.
-*	unmute (unmute <mxid>) — allow a peasant to speak`
+*	unmute (unmute <mxid>) — allow a peasant to speak.`
 
 const stickerServer = "spitetech.com"
 
