@@ -234,7 +234,7 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 			continue
 		}
 
-		if f.Config.Firefox && strings.Contains(line, "firefox") {
+		if l := strings.ToLower(line); f.Config.Firefox && strings.Contains(l, "firefox") {
 			if err := f.SendFallacy(ev.RoomID); err != nil {
 				log.Println(err)
 			}
