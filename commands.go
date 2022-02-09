@@ -333,7 +333,23 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 		log.Println(err)
 		return
 	}
-	go f.purgeEvents(msg.Chunk)
+
+	for {
+		for _, e := range msg.Chunk {
+			if e == nil {
+				continue
+			}
+			go f.RedactMessage(*e)
+			if e.ID == ev.ID {
+				return
+			}
+		}
+		msg, err = f.Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, maxFetchLimit)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+	}
 }
 
 // SayMessage sends a message into the chat.
