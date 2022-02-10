@@ -344,7 +344,7 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 				return
 			}
 		}
-		msg, err = f.Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, maxFetchLimit)
+		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'f', &purgeFilter, maxFetchLimit)
 		if err != nil {
 			log.Println(err)
 			return
