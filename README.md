@@ -12,7 +12,9 @@ deficiencies of other matrix bots, it aims to be simple, fast, and efficient.
 Much of the design was inspired by [@rSophieBot](https://t.me/rSophieBot).
 
 Currently, it is dependent on rate-limits being disabled, but it is possible to
-rework many of the commands to cope with the rate limits.
+rework many of the commands to cope with the rate limits. It is worth noting
+this bot is not suited for homeservers unable to handle more than a couple
+requests at a time, especially when purging vast amounts of messages.
 
 ## Features
 
