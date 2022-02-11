@@ -62,66 +62,63 @@ func (f *Fallacy) banWithReason(roomID id.RoomID, userID id.UserID, reason strin
 	return
 }
 
-// GlobBanSlice glob bans a slice of globs.
-func (f *Fallacy) GlobBanSlice(globs []string, ev event.Event) {
+type ban struct {
+	Glob   glob.Glob
+	RoomID id.RoomID
+
+	Join  mautrix.RespJoinedMembers
+	Power event.PowerLevelsEventContent
+}
+
+func (f *Fallacy) banUsers(b ban) {
+	for user := range b.Join.Joined {
+		if u := user.String(); !b.Glob.Match(u) {
+			continue
+		}
+		if isAdmin(b.Power, b.RoomID, user) {
+			const adminBanMessage = "Haha, let's /demote him first."
+			f.attemptSendNotice(b.RoomID, adminBanMessage)
+			return
+		}
+		if err := f.banWithReason(b.RoomID, user, globBanReason); err != nil {
+			f.attemptSendNotice(b.RoomID, err.Error())
+		}
+	}
+}
+
+// BanUsers glob bans a slice of users, expressed as globs.
+func (f *Fallacy) BanUsers(globs []string, ev event.Event) {
 	if !f.hasPerms(ev.RoomID, event.StateMember) {
 		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
 
-	for _, u := range globs {
-		glob, err := glob.Compile(u)
-		if err != nil {
-			msg := "compiling glob " + u + " failed!"
-			f.attemptSendNotice(ev.RoomID, msg)
-			return
-		}
-		f.GlobBanJoinedMembers(glob, ev.RoomID)
-	}
-}
-
-// GlobBanUser bans a single user from the room if it matches the supplied glob,
-// returning an error if unsuccessful.
-func (f *Fallacy) GlobBanUser(glob glob.Glob, roomID id.RoomID, userID id.UserID) (err error) {
-	if userString := userID.String(); !glob.Match(userString) {
-		return
-	}
-	err = f.banWithReason(roomID, userID, globBanReason)
-	return
-}
-
-// GlobBanJoinedMembers bans all users matching the glob from the room,
-// returning an error if unsuccessful.
-//
-// This does not attempt to ban admins, sending a notice when an attempt is made
-// to ban an admin or banning a user fails.
-func (f *Fallacy) GlobBanJoinedMembers(glob glob.Glob, roomID id.RoomID) (err error) {
-	jm, err := f.Client.JoinedMembers(roomID)
+	jm, err := f.Client.JoinedMembers(ev.RoomID)
 	if err != nil {
 		return
 	}
 
-	pl, err := f.powerLevels(roomID)
+	pl, err := f.powerLevels(ev.RoomID)
 	if err != nil {
 		return
 	}
 
-	for user := range jm.Joined {
-		go func(u id.UserID) {
-			if uString := u.String(); !glob.Match(uString) {
+	for _, glb := range globs {
+		go func(glb string) {
+			g, err := glob.Compile(glb)
+			if err != nil {
+				msg := strings.Join([]string{"compiling glob", glb, "failed!"}, " ")
+				f.attemptSendNotice(ev.RoomID, msg)
 				return
 			}
-			if isAdmin(&pl, roomID, u) {
-				const adminBanMessage = "Haha, let's /demote him first."
-				f.attemptSendNotice(roomID, adminBanMessage)
-				return
-			}
-			if err := f.banWithReason(roomID, u, globBanReason); err != nil {
-				f.attemptSendNotice(roomID, err.Error())
-			}
-		}(user)
+			f.banUsers(ban{
+				Glob:   g,
+				RoomID: ev.RoomID,
+				Join:   *jm,
+				Power:  pl,
+			})
+		}(glb)
 	}
-	return
 }
 
 // GlobBanJoinedRooms utilizes the power of glob to ban users matching the glob
@@ -134,9 +131,22 @@ func (f *Fallacy) GlobBanJoinedRooms(glob glob.Glob) (err error) {
 
 	for _, room := range jr.JoinedRooms {
 		go func(r id.RoomID) {
-			if err := f.GlobBanJoinedMembers(glob, r); err != nil {
+			jm, err := f.Client.JoinedMembers(r)
+			if err != nil {
 				log.Println(err)
+				return
 			}
+			pl, err := f.powerLevels(r)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			f.banUsers(ban{
+				Glob:   glob,
+				RoomID: r,
+				Join:   *jm,
+				Power:  pl,
+			})
 		}(room)
 	}
 	return

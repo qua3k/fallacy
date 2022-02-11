@@ -85,7 +85,7 @@ func main() {
 	syncer.OnEventType(event.EventMessage, f.HandleMessage)
 	syncer.OnEventType(event.StateTombstone, f.HandleTombstone)
 	f.Register("ban", fallacy.Callback{
-		Function: f.GlobBanSlice,
+		Function: f.BanUsers,
 		MinArgs:  1,
 	})
 	f.Register("mute", fallacy.Callback{
