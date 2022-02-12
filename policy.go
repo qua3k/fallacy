@@ -88,17 +88,18 @@ func (f *Fallacy) banUsers(b ban) {
 
 // BanUsers glob bans a slice of users expressed as globs.
 func (f *Fallacy) BanUsers(globs []string, ev event.Event) {
-	if !f.hasPerms(ev.RoomID, event.StateMember) {
+	pl, err := f.powerLevels(ev.RoomID)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	if pl.Ban() > pl.GetUserLevel(f.Client.UserID) {
 		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
 
 	jm, err := f.Client.JoinedMembers(ev.RoomID)
-	if err != nil {
-		return
-	}
-
-	pl, err := f.powerLevels(ev.RoomID)
 	if err != nil {
 		return
 	}
