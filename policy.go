@@ -86,7 +86,7 @@ func (f *Fallacy) banUsers(b ban) {
 	}
 }
 
-// BanUsers glob bans a slice of users, expressed as globs.
+// BanUsers glob bans a slice of users expressed as globs.
 func (f *Fallacy) BanUsers(globs []string, ev event.Event) {
 	if !f.hasPerms(ev.RoomID, event.StateMember) {
 		f.attemptSendNotice(ev.RoomID, noPermsMessage)
