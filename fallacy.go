@@ -136,6 +136,16 @@ func (f *Fallacy) SendFallacy(roomID id.RoomID) (err error) {
 	return
 }
 
+// attemptSendNotice wraps Client.SendNotice, logging when a notice is unable to
+// be sent.
+func (f *Fallacy) attemptSendNotice(roomID id.RoomID, text string) {
+	if _, err := f.Client.SendNotice(roomID, text); err == nil {
+		return
+	}
+	msg := strings.Join([]string{"could not send notice", text, "into room", roomID.String()}, " ")
+	log.Println(msg)
+}
+
 // HandleUserPolicy handles m.policy.rule.user events. Initially limited to
 // room admins but could possibly be extended to members of specific rooms.
 func (f *Fallacy) HandleUserPolicy(_ mautrix.EventSource, ev *event.Event) {

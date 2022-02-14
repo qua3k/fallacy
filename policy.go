@@ -17,16 +17,6 @@ import (
 // the reason for the season
 const globBanReason = "u jus got glob ban"
 
-// attemptSendNotice wraps Client.SendNotice, logging when a notice is unable to
-// be sent.
-func (f *Fallacy) attemptSendNotice(roomID id.RoomID, text string) {
-	if _, err := f.Client.SendNotice(roomID, text); err == nil {
-		return
-	}
-	msg := strings.Join([]string{"could not send notice", text, "into room", roomID.String()}, " ")
-	log.Println(msg)
-}
-
 // AddJoinRule adds a join rule to ban users on sight.
 func (f *Fallacy) AddJoinRule(rule string) {
 	// TODO: evaluate speed of rlock/runlock/lock/unlock
