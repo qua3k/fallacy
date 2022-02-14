@@ -220,7 +220,6 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 			if err := f.SendFallacy(ev.RoomID); err != nil {
 				log.Println(err)
 			}
-			continue
 		}
 
 		fields, prefix := strings.Fields(line), "!"+f.Config.Name
