@@ -30,7 +30,7 @@ requests at a time, especially when purging vast amounts of messages.
 *   tells users you dont want to hear them (mute users)
 *   removes your shitposts (purges messages)
 *   lets everyone know how cool you are (pin messages)
-*   sprouts fallacies, if you choose to (say messages)
+*   spouts fallacies, if you choose to (say messages)
 *   removes your enemies (bans users)
 
 ## To-do
