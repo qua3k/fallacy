@@ -243,15 +243,12 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 // HandleTombStone handles m.room.tombstone events, automatically joining the
 // new room.
 func (f *Fallacy) HandleTombstone(_ mautrix.EventSource, ev *event.Event) {
-	r, ok := ev.Content.Raw["replacement_room"].(string)
-	if !ok {
-		log.Printf("asserting `replacement_room` key failed! expected string, got: %T\n", r)
-		return
-	}
-
-	reason := map[string]string{"reason": "following room upgrade"}
-	if _, err := f.Client.JoinRoom(r, "", reason); err != nil {
-		msg := strings.Join([]string{"attempting to join room", r, "failed with error:", err.Error()}, " ")
+	var (
+		room   = ev.Content.Raw["replacement_room"].(string)
+		reason = map[string]string{"reason": "following room upgrade"}
+	)
+	if _, err := f.Client.JoinRoom(room, "", reason); err != nil {
+		msg := strings.Join([]string{"attempting to join room", room, "failed with error:", err.Error()}, " ")
 		f.attemptSendNotice(ev.RoomID, msg)
 	}
 }
