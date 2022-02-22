@@ -217,6 +217,12 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 
 	body := msg.Body
 
+	if l := strings.ToLower(body); f.Config.Firefox && strings.Contains(l, "firefox") {
+		if err := f.SendFallacy(ev.RoomID); err != nil {
+			log.Println(err)
+		}
+	}
+
 	reader := strings.NewReader(body)
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
@@ -224,12 +230,6 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 		switch {
 		case len(line) < 1, isUnreadable(line):
 			continue
-		}
-
-		if l := strings.ToLower(line); f.Config.Firefox && strings.Contains(l, "firefox") {
-			if err := f.SendFallacy(ev.RoomID); err != nil {
-				log.Println(err)
-			}
 		}
 
 		fields, prefix := strings.Fields(line), "!"+f.Config.Name
