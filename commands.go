@@ -28,6 +28,8 @@ type Callback struct {
 
 // Register adds a function to the map.
 func (f *Fallacy) Register(keyword string, callback Callback) {
+	keyword = strings.ToLower(keyword)
+
 	_, ok := f.Handlers[keyword]
 	if !ok {
 		f.Handlers[keyword] = []Callback{}
@@ -49,20 +51,15 @@ func (f *Fallacy) notifyListeners(command []string, event event.Event) {
 		return
 	}
 
-	action := command[1]
-	for keyword, listen := range f.Handlers {
-		if !strings.EqualFold(action, keyword) {
-			continue
-		}
-
-		for _, s := range listen {
-			input := command[2:]
-			if len(input) < s.MinArgs {
+	action := strings.ToLower(command[1])
+	if c, ok := f.Handlers[action]; ok {
+		for i := range c {
+			in := command[2:]
+			if len(in) < c[i].MinArgs {
 				continue
 			}
-			s.Function(input, event)
+			c[i].Function(in, event)
 		}
-		return
 	}
 	if !strings.EqualFold(action, "help") {
 		f.attemptSendNotice(roomID, action+" is not a valid command!")
