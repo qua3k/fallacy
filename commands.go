@@ -60,6 +60,7 @@ func (f *Fallacy) notifyListeners(command []string, event event.Event) {
 			}
 			c[i].Function(in, event)
 		}
+		return
 	}
 	if !strings.EqualFold(action, "help") {
 		f.attemptSendNotice(roomID, action+" is not a valid command!")
