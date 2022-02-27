@@ -126,7 +126,7 @@ func (s *FallacySyncer) OnFailedSync(res *mautrix.RespSync, err error) (time.Dur
 	return 10 * time.Second, nil
 }
 
-func (s *FallacySyncer) GetFilterJSON(userID id.UserID) *mautrix.Filter {
+func (s *FallacySyncer) GetFilterJSON(id.UserID) *mautrix.Filter {
 	return &mautrix.Filter{
 		Room: mautrix.RoomFilter{
 			Timeline: mautrix.FilterPart{
