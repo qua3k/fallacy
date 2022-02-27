@@ -153,9 +153,7 @@ func (f *Fallacy) HandleUserPolicy(_ mautrix.EventSource, ev *event.Event) {
 		return
 	}
 
-	r := ev.Content.Raw["recommendation"].(string)
-
-	switch r {
+	switch ev.Content.Raw["recommendation"].(string) {
 	case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove non-spec mjolnir recommendation
 		g, err := glob.Compile(ev.Content.Raw["entity"].(string))
 		if err != nil {
@@ -175,9 +173,7 @@ func (f *Fallacy) HandleServerPolicy(_ mautrix.EventSource, ev *event.Event) {
 		return
 	}
 
-	r := ev.Content.Raw["recommendation"].(string)
-
-	switch r {
+	switch ev.Content.Raw["recommendation"].(string) {
 	case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove non-spec mjolnir recommendation
 		e := ev.Content.Raw["entity"].(string)
 		if err := f.BanServerJoinedRooms(e); err != nil {
@@ -228,7 +224,7 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 			continue
 		}
 
-		if l := strings.ToLower(body); f.Config.Firefox && strings.Contains(l, "firefox") {
+		if l := strings.ToLower(line); f.Config.Firefox && strings.Contains(l, "firefox") {
 			once.Do(func() {
 				if err := f.SendFallacy(ev.RoomID); err != nil {
 					log.Println(err)
