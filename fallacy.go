@@ -98,10 +98,12 @@ func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (*Fal
 }
 
 // isUnreadable returns whether a line is prefixed with an unreadable constant.
-func isUnreadable(line string) bool {
-	switch {
-	case strings.HasPrefix(line, "*"), strings.HasPrefix(line, ">"):
-		return true
+func isUnreadable(s string) bool {
+	if len(s) > 0 {
+		switch s[0:1] {
+		case "*", ">":
+			return true
+		}
 	}
 	return false
 }
