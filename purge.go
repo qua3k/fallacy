@@ -25,15 +25,6 @@ func (f *Fallacy) RedactMessage(ev event.Event) (err error) {
 	return
 }
 
-func (f *Fallacy) purgeEvents(evs []*event.Event) {
-	for _, e := range evs {
-		if e == nil {
-			continue
-		}
-		go f.RedactMessage(*e)
-	}
-}
-
 func (f *Fallacy) redactUsers(users []string, ev event.Event) {
 	for _, u := range users {
 		if id.UserID(u) != ev.Sender {
@@ -81,32 +72,25 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 		f.attemptSendNotice(ev.RoomID, noPermsMessage)
 		return
 	}
-
-	relatesTo := ev.Content.AsMessage().RelatesTo
-	if relatesTo == nil {
+	relate := ev.Content.AsMessage().RelatesTo
+	if relate == nil {
 		f.attemptSendNotice(ev.RoomID, "Reply to the message you want to purge!")
 		return
 	}
-
-	c, err := f.Client.Context(ev.RoomID, relatesTo.EventID, &purgeFilter, 1)
+	c, err := f.Client.Context(ev.RoomID, relate.EventID, &purgeFilter, 1)
 	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	if c.Event == nil {
-		log.Println("event is nil (should this happen)?")
+		log.Println("fetching context failed with error", err)
 		return
 	}
 	go f.RedactMessage(*c.Event)
-	go f.purgeEvents(c.EventsAfter)
 
 	msg, err := f.Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, maxFetchLimit)
 	if err != nil {
-		log.Println(err)
+		log.Println("fetching messages failed with error:", err)
 		return
 	}
 
+	msg.Chunk = append(c.EventsAfter, msg.Chunk...)
 	for {
 		for _, e := range msg.Chunk {
 			if e == nil {
