@@ -15,9 +15,9 @@ import (
 
 // The max amount of messages to fetch at once—the server will only give about
 // ~1000 events.
-const maxFetchLimit = 1000
+const fetchLimit = 1000
 const adminMessage = "shut up ur not admin"
-const noPermsMessage = "Fallacy does not have sufficient permission to perform that action!"
+const permsMessage = "Fallacy does not have sufficient permission to perform that action!"
 
 type commandListener func(command []string, event event.Event)
 
@@ -125,7 +125,7 @@ func (f *Fallacy) hasPerms(roomID id.RoomID, event event.Type) bool {
 // BanServer bans a server by adding it to the room ACL.
 func (f *Fallacy) BanServer(roomID id.RoomID, homeserverID string) (err error) {
 	if !f.hasPerms(roomID, event.StateServerACL) {
-		f.attemptSendNotice(roomID, noPermsMessage)
+		f.attemptSendNotice(roomID, permsMessage)
 		return
 	}
 
@@ -172,7 +172,7 @@ func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // This could probably be optimized.
 func (f *Fallacy) MuteUsers(users []string, ev event.Event) {
 	if !f.hasPerms(ev.RoomID, event.StateServerACL) {
-		f.attemptSendNotice(ev.RoomID, noPermsMessage)
+		f.attemptSendNotice(ev.RoomID, permsMessage)
 		return
 	}
 
@@ -204,7 +204,7 @@ func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // This could probably be optimized.
 func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
 	if !f.hasPerms(ev.RoomID, event.StateServerACL) {
-		f.attemptSendNotice(ev.RoomID, noPermsMessage)
+		f.attemptSendNotice(ev.RoomID, permsMessage)
 		return
 	}
 
@@ -218,7 +218,7 @@ func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
 // PinMessage pins the replied-to event.
 func (f *Fallacy) PinMessage(_ []string, ev event.Event) {
 	if !f.hasPerms(ev.RoomID, event.StatePinnedEvents) {
-		f.attemptSendNotice(ev.RoomID, noPermsMessage)
+		f.attemptSendNotice(ev.RoomID, permsMessage)
 		return
 	}
 

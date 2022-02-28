@@ -37,12 +37,12 @@ func (f *Fallacy) redactUsers(users []string, ev event.Event) {
 // PurgeUsers redacts all messages sent by the specified users.
 func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 	if !f.hasPerms(ev.RoomID, event.EventRedaction) {
-		f.attemptSendNotice(ev.RoomID, noPermsMessage)
+		f.attemptSendNotice(ev.RoomID, permsMessage)
 		return
 	}
 
 	filter := purgeUserFilter(users)
-	msg, err := f.Client.Messages(ev.RoomID, "", "", 'b', &filter, maxFetchLimit)
+	msg, err := f.Client.Messages(ev.RoomID, "", "", 'b', &filter, fetchLimit)
 	if err != nil {
 		log.Println(err)
 		return
@@ -57,7 +57,7 @@ func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 			}
 			go f.redactUsers(users, *e)
 		}
-		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, maxFetchLimit)
+		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, fetchLimit)
 		if err != nil {
 			log.Println(err)
 			return
@@ -69,7 +69,7 @@ func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 // It's loosely inspired by Telegram's SophieBot mechanics.
 func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	if !f.hasPerms(ev.RoomID, event.EventRedaction) {
-		f.attemptSendNotice(ev.RoomID, noPermsMessage)
+		f.attemptSendNotice(ev.RoomID, permsMessage)
 		return
 	}
 	relate := ev.Content.AsMessage().RelatesTo
@@ -84,7 +84,7 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	}
 	go f.RedactMessage(*c.Event)
 
-	msg, err := f.Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, maxFetchLimit)
+	msg, err := f.Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, fetchLimit)
 	if err != nil {
 		log.Println("fetching messages failed with error:", err)
 		return

@@ -85,7 +85,7 @@ func (f *Fallacy) BanUsers(globs []string, ev event.Event) {
 	}
 
 	if pl.Ban() > pl.GetUserLevel(f.Client.UserID) {
-		f.attemptSendNotice(ev.RoomID, noPermsMessage)
+		f.attemptSendNotice(ev.RoomID, permsMessage)
 		return
 	}
 
