@@ -91,17 +91,22 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	}
 
 	msg.Chunk = append(c.EventsAfter, msg.Chunk...)
+	buf := make(chan bool, 50)
 	for {
 		for _, e := range msg.Chunk {
 			if e == nil {
 				continue
 			}
-			go f.RedactMessage(*e)
+			go func(e event.Event) {
+				buf <- true
+				f.RedactMessage(e)
+				<-buf
+			}(*e)
 			if e.ID == ev.ID {
 				return
 			}
 		}
-		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'f', &purgeFilter, maxFetchLimit)
+		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'f', &purgeFilter, fetchLimit)
 		if err != nil {
 			log.Println(err)
 			return
