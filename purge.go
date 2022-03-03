@@ -90,13 +90,15 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 		return
 	}
 
+	if msg == nil {
+		log.Println("/messages response was nil, server has nothing to send us")
+		return
+	}
+
 	msg.Chunk = append(c.EventsAfter, msg.Chunk...)
 	buf := make(chan bool, 50)
 	for {
 		for _, e := range msg.Chunk {
-			if e == nil {
-				continue
-			}
 			go func(e event.Event) {
 				buf <- true
 				f.RedactMessage(e)
