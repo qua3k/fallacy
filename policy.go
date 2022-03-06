@@ -57,7 +57,7 @@ type ban struct {
 	RoomID id.RoomID
 
 	Join  mautrix.RespJoinedMembers
-	Power event.PowerLevelsEventContent
+	Power *event.PowerLevelsEventContent
 }
 
 func (f *Fallacy) banUsers(b ban) {
@@ -106,7 +106,7 @@ func (f *Fallacy) BanUsers(globs []string, ev event.Event) {
 				Glob:   g,
 				RoomID: ev.RoomID,
 				Join:   *jm,
-				Power:  pl,
+				Power:  &pl,
 			})
 		}(glb)
 	}
@@ -136,7 +136,7 @@ func (f *Fallacy) GlobBanJoinedRooms(glob glob.Glob) (err error) {
 				Glob:   glob,
 				RoomID: r,
 				Join:   *jm,
-				Power:  pl,
+				Power:  &pl,
 			})
 		}(room)
 	}

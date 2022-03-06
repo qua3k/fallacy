@@ -80,7 +80,12 @@ func (f *Fallacy) acls(roomID id.RoomID) (resp event.ServerACLEventContent, err 
 	return
 }
 
-func isAdmin(pl event.PowerLevelsEventContent, roomID id.RoomID, userID id.UserID) bool {
+func (f *Fallacy) roomName(roomID id.RoomID) (resp event.RoomNameEventContent, err error) {
+	err = f.Client.StateEvent(roomID, event.StateRoomName, "", &resp)
+	return
+}
+
+func isAdmin(pl *event.PowerLevelsEventContent, roomID id.RoomID, userID id.UserID) bool {
 	bp, kp, rp := pl.Ban(), pl.Kick(), pl.Redact()
 
 	minInt := func(i ...int) (m int) {
@@ -105,7 +110,7 @@ func (f *Fallacy) isAdmin(roomID id.RoomID, userID id.UserID) bool {
 		return false
 	}
 
-	return isAdmin(pl, roomID, userID)
+	return isAdmin(&pl, roomID, userID)
 }
 
 // Checks whether the fallacy bot has perms.
@@ -160,7 +165,9 @@ func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 
 	level := pl.GetEventLevel(event.EventMessage) - 1
 	if pl.GetUserLevel(targetID) <= level {
-		return errors.New("cannot mute a user that is already muted")
+		const e = "cannot mute a user that is not muted"
+		f.attemptSendNotice(roomID, e)
+		return errors.New(e)
 	}
 
 	pl.SetUserLevel(targetID, level)
@@ -171,7 +178,7 @@ func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // MuteUsers mutes multiple users of a slice.
 // This could probably be optimized.
 func (f *Fallacy) MuteUsers(users []string, ev event.Event) {
-	if !f.hasPerms(ev.RoomID, event.StateServerACL) {
+	if !f.hasPerms(ev.RoomID, event.StatePowerLevels) {
 		f.attemptSendNotice(ev.RoomID, permsMessage)
 		return
 	}
@@ -179,7 +186,20 @@ func (f *Fallacy) MuteUsers(users []string, ev event.Event) {
 	for _, u := range users {
 		if err := f.MuteUser(ev.RoomID, id.UserID(u)); err != nil {
 			log.Println("muting user", u, "failed with", err)
+			continue
 		}
+
+		r, err := f.roomName(ev.RoomID)
+		if err != nil {
+			log.Println("could not get room name, failed with", err)
+		}
+
+		n := ev.RoomID.String()
+		if r.Name != "" && r.Name != " " {
+			n = r.Name
+		}
+		msg := strings.Join([]string{u, "was muted by", ev.Sender.String(), "in", n}, " ")
+		f.attemptSendNotice(ev.RoomID, msg)
 	}
 }
 
@@ -192,7 +212,9 @@ func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 
 	level := pl.GetEventLevel(event.EventMessage)
 	if pl.GetUserLevel(targetID) >= level {
-		return errors.New("cannot unmute a user that is not muted")
+		const e = "cannot unmute a user that is not muted"
+		f.attemptSendNotice(roomID, e)
+		return errors.New(e)
 	}
 
 	pl.SetUserLevel(targetID, level)
@@ -203,7 +225,7 @@ func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
 // UnmuteUsers mutes multiple users of a slice.
 // This could probably be optimized.
 func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
-	if !f.hasPerms(ev.RoomID, event.StateServerACL) {
+	if !f.hasPerms(ev.RoomID, event.StatePowerLevels) {
 		f.attemptSendNotice(ev.RoomID, permsMessage)
 		return
 	}
@@ -211,7 +233,20 @@ func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
 	for _, u := range users {
 		if err := f.UnmuteUser(ev.RoomID, id.UserID(u)); err != nil {
 			log.Println("unmuting user", u, "failed with", err)
+			continue
 		}
+
+		r, err := f.roomName(ev.RoomID)
+		if err != nil {
+			log.Println("could not get room name, failed with", err)
+		}
+
+		n := ev.RoomID.String()
+		if r.Name != "" && r.Name != " " {
+			n = r.Name
+		}
+		msg := strings.Join([]string{u, "was muted by", ev.Sender.String(), "in", n}, " ")
+		f.attemptSendNotice(ev.RoomID, msg)
 	}
 }
 

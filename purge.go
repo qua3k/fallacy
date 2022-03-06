@@ -6,6 +6,7 @@ package fallacy
 
 import (
 	"log"
+	"time"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -97,6 +98,7 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 
 	msg.Chunk = append(c.EventsAfter, msg.Chunk...)
 	buf := make(chan bool, 50)
+out:
 	for {
 		for _, e := range msg.Chunk {
 			go func(e event.Event) {
@@ -105,7 +107,7 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 				<-buf
 			}(*e)
 			if e.ID == ev.ID {
-				return
+				break out
 			}
 		}
 		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'f', &purgeFilter, fetchLimit)
@@ -114,4 +116,10 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 			return
 		}
 	}
+	resp := f.attemptSendNotice(ev.RoomID, "Purging messages done! This message will be removed in 5 seconds...")
+	time.AfterFunc(5*time.Second, func() {
+		if _, err := f.Client.RedactEvent(ev.RoomID, resp.EventID, mautrix.ReqRedact{}); err != nil {
+			log.Println(err)
+		}
+	})
 }
