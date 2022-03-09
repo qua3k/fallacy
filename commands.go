@@ -40,7 +40,6 @@ func (f *Fallacy) notifyListeners(command []string, ev event.Event) {
 		if _, err := f.sendReply(ev, usage); err != nil {
 			log.Println("could not send reply into room, failed with:", err)
 		}
-		f.printHelp(ev.RoomID)
 		return
 	}
 
