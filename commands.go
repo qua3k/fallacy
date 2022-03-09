@@ -16,73 +16,47 @@ import (
 // The max amount of messages to fetch at once—the server will only give about
 // ~1000 events.
 const fetchLimit = 1000
-const adminMessage = "shut up ur not admin"
 const permsMessage = "Fallacy does not have sufficient permission to perform that action!"
 
-type commandListener func(command []string, event event.Event)
-
+type listener func(command []string, event event.Event)
 type Callback struct {
-	Function commandListener
-	MinArgs  int
+	Function listener
+	Min      int
 }
 
-// Register adds a function to the map.
+// Register registers a command with a keyword.
 func (f *Fallacy) Register(keyword string, callback Callback) {
 	keyword = strings.ToLower(keyword)
 
-	_, ok := f.Handlers[keyword]
-	if !ok {
+	if _, ok := f.Handlers[keyword]; !ok {
 		f.Handlers[keyword] = []Callback{}
 	}
 	f.Handlers[keyword] = append(f.Handlers[keyword], callback)
 }
 
 // notifyListeners notifies listeners of incoming events.
-func (f *Fallacy) notifyListeners(command []string, event event.Event) {
-	roomID := event.RoomID
-
-	if l := len(command); l < 2 {
-		f.printHelp(roomID)
+func (f *Fallacy) notifyListeners(command []string, ev event.Event) {
+	if len(command) < 2 || strings.EqualFold(command[1], "help") {
+		f.printHelp(ev.RoomID)
 		return
 	}
 
-	if !f.isAdmin(roomID, event.Sender) {
-		f.attemptSendNotice(roomID, adminMessage)
+	if !f.isAdmin(ev.RoomID, ev.Sender) {
+		f.attemptSendNotice(ev.RoomID, "shut up ur not admin")
 		return
 	}
 
-	action := strings.ToLower(command[1])
-	if c, ok := f.Handlers[action]; ok {
+	if c, ok := f.Handlers[strings.ToLower(command[1])]; ok {
 		for i := range c {
-			in := command[2:]
-			if len(in) < c[i].MinArgs {
+			args := command[2:]
+			if len(args) < c[i].Min {
 				continue
 			}
-			c[i].Function(in, event)
+			go c[i].Function(args, ev)
 		}
 		return
 	}
-	if !strings.EqualFold(action, "help") {
-		f.attemptSendNotice(roomID, action+" is not a valid command!")
-	}
-	f.printHelp(roomID)
-}
-
-// powerLevels returns a power levels struct from the specified roomID.
-func (f *Fallacy) powerLevels(roomID id.RoomID) (resp event.PowerLevelsEventContent, err error) {
-	err = f.Client.StateEvent(roomID, event.StatePowerLevels, "", &resp)
-	return
-}
-
-// acls returns an ACL struct.
-func (f *Fallacy) acls(roomID id.RoomID) (resp event.ServerACLEventContent, err error) {
-	err = f.Client.StateEvent(roomID, event.StateServerACL, "", &resp)
-	return
-}
-
-func (f *Fallacy) roomName(roomID id.RoomID) (resp event.RoomNameEventContent, err error) {
-	err = f.Client.StateEvent(roomID, event.StateRoomName, "", &resp)
-	return
+	f.attemptSendNotice(ev.RoomID, command[1]+" is not a valid command!")
 }
 
 func isAdmin(pl *event.PowerLevelsEventContent, roomID id.RoomID, userID id.UserID) bool {

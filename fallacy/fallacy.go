@@ -86,11 +86,11 @@ func main() {
 	syncer.OnEventType(event.StateTombstone, f.HandleTombstone)
 	f.Register("ban", fallacy.Callback{
 		Function: f.BanUsers,
-		MinArgs:  1,
+		Min:      1,
 	})
 	f.Register("mute", fallacy.Callback{
 		Function: f.MuteUsers,
-		MinArgs:  1,
+		Min:      1,
 	})
 	f.Register("pin", fallacy.Callback{
 		Function: f.PinMessage,
@@ -100,15 +100,15 @@ func main() {
 	})
 	f.Register("purgeuser", fallacy.Callback{
 		Function: f.PurgeUsers,
-		MinArgs:  1,
+		Min:      1,
 	})
 	f.Register("say", fallacy.Callback{
 		Function: f.SayMessage,
-		MinArgs:  1,
+		Min:      1,
 	})
 	f.Register("unmute", fallacy.Callback{
 		Function: f.MuteUsers,
-		MinArgs:  1,
+		Min:      1,
 	})
 
 	old := &mautrix.OldEventIgnorer{
