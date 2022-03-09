@@ -37,12 +37,17 @@ func (f *Fallacy) Register(keyword string, callback Callback) {
 // notifyListeners notifies listeners of incoming events.
 func (f *Fallacy) notifyListeners(command []string, ev event.Event) {
 	if len(command) < 2 || strings.EqualFold(command[1], "help") {
+		if _, err := f.sendReply(ev, usage); err != nil {
+			log.Println("could not send reply into room, failed with:", err)
+		}
 		f.printHelp(ev.RoomID)
 		return
 	}
 
 	if !f.isAdmin(ev.RoomID, ev.Sender) {
-		f.attemptSendNotice(ev.RoomID, "shut up ur not admin")
+		if _, err := f.sendReply(ev, "shut up ur not admin"); err != nil {
+			log.Println("could not send reply into room, failed with:", err)
+		}
 		return
 	}
 

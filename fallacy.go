@@ -139,6 +139,18 @@ func (f *Fallacy) attemptSendNotice(roomID id.RoomID, text string) *mautrix.Resp
 	return nil
 }
 
+// sendReply sends a message as a reply to another message.
+func (f *Fallacy) sendReply(ev event.Event, s string) (*mautrix.RespSendEvent, error) {
+	return f.Client.SendMessageEvent(ev.RoomID, event.EventMessage, &event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    s,
+		RelatesTo: &event.RelatesTo{
+			Type:    event.RelReply,
+			EventID: ev.ID,
+		},
+	})
+}
+
 // HandleUserPolicy handles m.policy.rule.user events. Initially limited to
 // room admins but could possibly be extended to members of specific rooms.
 func (f *Fallacy) HandleUserPolicy(_ mautrix.EventSource, ev *event.Event) {
