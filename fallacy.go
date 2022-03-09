@@ -21,7 +21,7 @@ import (
 )
 
 const stickerServer = "spitetech.com"
-const usage = "Hey, check out the usage guide at https://github.com/qua3k/fallacy/USAGE.md"
+const usage = "Hey, check out the usage guide at https://github.com/qua3k/fallacy/blob/main/USAGE.md"
 
 // The fallacy stickers we can use.
 var fallacyStickers = [...]id.ContentURI{
