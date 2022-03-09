@@ -37,4 +37,6 @@ Deletes all messages from a specified user.
 
 ## say
 
+    say <text>
+
 The bot says something.
