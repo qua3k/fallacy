@@ -20,18 +20,8 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-const usage = `fallacy bot help:
-the following commands are available
-
-*	ban (ban <glob>) — bans your enemies. Takes a glob.
-*	mute (mute <mxid>) — avoid having to hear your friends.
-*	pin — pins the message you replied to.
-*	purge — deletes all messages from the message you replied to.
-*	purgeuser (purgeuser <mxid>) — purges messages from that user until the beginning of time.
-*	say (say <message>) — let the bot say something.
-*	unmute (unmute <mxid>) — allow a peasant to speak.`
-
 const stickerServer = "spitetech.com"
+const usage = "Hey, check out the usage guide at https://github.com/qua3k/fallacy/USAGE.md"
 
 // The fallacy stickers we can use.
 var fallacyStickers = [...]id.ContentURI{
