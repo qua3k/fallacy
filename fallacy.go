@@ -98,12 +98,6 @@ func isUnreadable(s string) bool {
 	return false
 }
 
-// printHelp sends the help message into a room, propagating errors from SendNotice.
-func (f *Fallacy) printHelp(roomID id.RoomID) (err error) {
-	_, err = f.Client.SendNotice(roomID, usage)
-	return
-}
-
 // SendFallacy sends a random fallacy into the chat. Users of this should
 // explicitly call rand.Seed().
 func (f *Fallacy) SendFallacy(roomID id.RoomID) (err error) {
