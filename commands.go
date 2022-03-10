@@ -92,7 +92,7 @@ func (f *Fallacy) isAdmin(roomID id.RoomID, userID id.UserID) bool {
 func (f *Fallacy) hasPerms(roomID id.RoomID, event event.Type) bool {
 	pl, err := f.powerLevels(roomID)
 	if err != nil {
-		log.Println("fetching power levels event failed!")
+		log.Println("fetching power levels event failed with error", err)
 		return false
 	}
 
