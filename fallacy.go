@@ -218,7 +218,8 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if len(line) < 1 || isUnreadable(line) {
+		fields := strings.Fields(line)
+		if len(fields) < 1 || isUnreadable(line) {
 			continue
 		}
 
@@ -230,7 +231,7 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 			})
 		}
 
-		fields, prefix := strings.Fields(line), "!"+f.Config.Name
+		prefix := "!" + f.Config.Name
 		if !strings.EqualFold(prefix, fields[0]) {
 			continue
 		}
