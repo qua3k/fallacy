@@ -218,8 +218,7 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
-		switch {
-		case len(line) < 1, isUnreadable(line):
+		if len(line) < 1 || isUnreadable(line) {
 			continue
 		}
 

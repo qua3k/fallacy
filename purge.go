@@ -13,6 +13,10 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+// The max amount of messages to fetch at once—the server will only give about
+// ~1000 events.
+const fetchLimit = 1000
+
 // RedactMessage only redacts message events, skipping redaction events, already
 // redacted events, and state events.
 func (f *Fallacy) RedactMessage(ev event.Event) (err error) {

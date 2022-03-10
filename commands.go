@@ -13,14 +13,11 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// The max amount of messages to fetch at once—the server will only give about
-// ~1000 events.
-const fetchLimit = 1000
+// Message to be sent when fallacy does not have sufficient permissions.
 const permsMessage = "Fallacy does not have sufficient permission to perform that action!"
 
-type listener func(command []string, event event.Event)
 type Callback struct {
-	Function listener
+	Function func(command []string, event event.Event)
 	Min      int
 }
 
