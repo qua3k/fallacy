@@ -89,11 +89,9 @@ func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (*Fal
 
 // isUnreadable returns whether a line is prefixed with an unreadable constant.
 func isUnreadable(s string) bool {
-	if len(s) > 0 {
-		switch s[0:1] {
-		case "*", ">":
-			return true
-		}
+	switch s {
+	case "*", ">":
+		return true
 	}
 	return false
 }
@@ -214,12 +212,11 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 
 	var once sync.Once
 
-	reader := strings.NewReader(body)
-	scanner := bufio.NewScanner(reader)
+	scanner := bufio.NewScanner(strings.NewReader(body))
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Fields(line)
-		if len(fields) < 1 || isUnreadable(line) {
+		if len(fields) < 1 || isUnreadable(fields[0]) {
 			continue
 		}
 
@@ -231,8 +228,7 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 			})
 		}
 
-		prefix := "!" + f.Config.Name
-		if !strings.EqualFold(prefix, fields[0]) {
+		if !strings.EqualFold("!"+f.Config.Name, fields[0]) {
 			continue
 		}
 		f.notifyListeners(fields, *ev)
