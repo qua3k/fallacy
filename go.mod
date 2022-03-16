@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/BurntSushi/toml v1.0.0
 	github.com/gobwas/glob v0.2.3
-	maunium.net/go/mautrix v0.10.11
+	maunium.net/go/mautrix v0.10.12
 )
 
 require (
