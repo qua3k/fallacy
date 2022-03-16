@@ -220,7 +220,7 @@ func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
 		if r.Name != "" && r.Name != " " {
 			n = r.Name
 		}
-		msg := strings.Join([]string{u, "was muted by", ev.Sender.String(), "in", n}, " ")
+		msg := strings.Join([]string{u, "was unmuted by", ev.Sender.String(), "in", n}, " ")
 		f.attemptSendNotice(ev.RoomID, msg)
 	}
 }
