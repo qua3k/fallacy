@@ -24,7 +24,7 @@ const stickerServer = "spitetech.com"
 const usage = "Hey, check out the usage guide at https://github.com/qua3k/fallacy/blob/main/USAGE.md"
 
 // The fallacy stickers we can use.
-var fallacyStickers = [...]id.ContentURI{
+var stickers = [...]id.ContentURI{
 	{
 		Homeserver: stickerServer,
 		FileID:     "XFgJMFCXulNthUiFUDqoEzuD",
@@ -98,24 +98,25 @@ func isUnreadable(s string) bool {
 
 // SendFallacy sends a random fallacy into the chat. Users of this should
 // explicitly call rand.Seed().
-func (f *Fallacy) SendFallacy(roomID id.RoomID) (err error) {
-	const defaultStickerSize = 256
-	const length = len(fallacyStickers)
+func SendFallacy(c *mautrix.Client, roomID id.RoomID) (err error) {
+	const (
+		defaultSize = 256
+		length      = len(stickers)
+	)
 
-	i := rand.Intn(length)
-	url := fallacyStickers[i]
-	_, err = f.Client.SendMessageEvent(roomID, event.EventSticker, &event.MessageEventContent{
+	u := stickers[rand.Intn(length)]
+	_, err = c.SendMessageEvent(roomID, event.EventSticker, &event.MessageEventContent{
 		Body: "no firefox here",
 		Info: &event.FileInfo{
-			Height: defaultStickerSize,
+			Height: defaultSize,
 			ThumbnailInfo: &event.FileInfo{
-				Height: defaultStickerSize,
-				Width:  defaultStickerSize,
+				Height: defaultSize,
+				Width:  defaultSize,
 			},
-			ThumbnailURL: url.CUString(),
-			Width:        defaultStickerSize,
+			ThumbnailURL: u.CUString(),
+			Width:        defaultSize,
 		},
-		URL: url.CUString(),
+		URL: u.CUString(),
 	})
 	return
 }
@@ -222,7 +223,7 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 
 		if l := strings.ToLower(line); f.Config.Firefox && strings.Contains(l, "firefox") {
 			once.Do(func() {
-				if err := f.SendFallacy(ev.RoomID); err != nil {
+				if err := SendFallacy(f.Client, ev.RoomID); err != nil {
 					log.Println(err)
 				}
 			})
