@@ -162,3 +162,41 @@ func (f *Fallacy) BanServerJoinedRooms(homeserverID string) (err error) {
 	}
 	return
 }
+
+func (f *Fallacy) ImportList(body []string, ev event.Event) {
+	var (
+		room   = body[0]
+		prefix = room[0]
+	)
+
+	if prefix != '#' && prefix != '!' {
+		return
+	}
+
+	roomID := id.RoomID(room)
+	if roomID == ev.RoomID {
+		f.attemptSendNotice(ev.RoomID, "why are you attempting to import events from this room?")
+		return
+	}
+
+	if _, err := f.Client.JoinRoom(room, "", nil); err != nil {
+		if prefix == '#' {
+			r, err := f.Client.ResolveAlias(id.RoomAlias(room))
+			if err != nil {
+				log.Println("yea not a valid alias")
+				return
+			}
+			roomID = r.RoomID
+		}
+		f.attemptSendNotice(roomID, "could not join room!")
+		return
+	}
+
+	s, err := f.Client.State(roomID)
+	if err != nil {
+		return
+	}
+	for k, e := range s[event.StatePolicyUser] {
+		f.Client.SendStateEvent(ev.RoomID, event.StatePolicyUser, k, e)
+	}
+}
