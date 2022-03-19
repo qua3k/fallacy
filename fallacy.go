@@ -88,9 +88,9 @@ func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (*Fal
 }
 
 // isUnreadable returns whether a line is prefixed with an unreadable constant.
-func isUnreadable(s string) bool {
+func isUnreadable(s byte) bool {
 	switch s {
-	case "*", ">":
+	case '*', '>':
 		return true
 	}
 	return false
@@ -217,7 +217,7 @@ func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		fields := strings.Fields(line)
-		if len(fields) < 1 || isUnreadable(fields[0]) {
+		if len(fields) < 1 || isUnreadable(line[0]) {
 			continue
 		}
 
