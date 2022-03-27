@@ -5,16 +5,23 @@
 package fallacy
 
 import (
-	"errors"
 	"log"
 	"strings"
+	"time"
 
+	"github.com/gobwas/glob"
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-// Message to be sent when fallacy does not have sufficient permissions.
-const permsMessage = "Fallacy does not have sufficient permission to perform that action!"
+const (
+	// Message to be sent when fallacy does not have sufficient permissions.
+	permsMessage = "Fallacy does not have sufficient permission to perform that action!"
+
+	// Usage message to be sent when asking for help.
+	usage = "Hey, check out the usage guide at https://github.com/qua3k/fallacy/blob/main/USAGE.md"
+)
 
 type Callback struct {
 	Function func(command []string, event event.Event)
@@ -22,232 +29,279 @@ type Callback struct {
 }
 
 // Register registers a command with a keyword.
-func (f *Fallacy) Register(keyword string, callback Callback) {
-	keyword = strings.ToLower(keyword)
+func Register(keyword string, callback Callback) {
+	lock.Lock()
+	defer lock.Unlock()
 
-	if _, ok := f.Handlers[keyword]; !ok {
-		f.Handlers[keyword] = []Callback{}
+	keyword = strings.ToLower(keyword)
+	if _, ok := handles[keyword]; !ok {
+		handles[keyword] = []Callback{}
 	}
-	f.Handlers[keyword] = append(f.Handlers[keyword], callback)
+	handles[keyword] = append(handles[keyword], callback)
 }
 
 // notifyListeners notifies listeners of incoming events.
-func (f *Fallacy) notifyListeners(command []string, ev event.Event) {
+func notifyListeners(command []string, ev event.Event) {
 	if len(command) < 2 || strings.EqualFold(command[1], "help") {
-		if _, err := f.sendReply(ev, usage); err != nil {
+		if _, err := sendReply(ev, usage); err != nil {
 			log.Println("could not send reply into room, failed with:", err)
 		}
 		return
 	}
 
-	if !f.isAdmin(ev.RoomID, ev.Sender) {
-		if _, err := f.sendReply(ev, "shut up ur not admin"); err != nil {
+	if !isAdmin(ev.RoomID, ev.Sender) {
+		if _, err := sendReply(ev, "shut up ur not admin"); err != nil {
 			log.Println("could not send reply into room, failed with:", err)
 		}
 		return
 	}
 
-	if c, ok := f.Handlers[strings.ToLower(command[1])]; ok {
+	if c, ok := handles[strings.ToLower(command[1])]; ok {
 		for i := range c {
 			args := command[2:]
 			if len(args) < c[i].Min {
+				sendNotice(ev.RoomID, "not enough arguments!")
 				continue
 			}
 			go c[i].Function(args, ev)
 		}
 		return
 	}
-	f.attemptSendNotice(ev.RoomID, command[1]+" is not a valid command!")
+	sendNotice(ev.RoomID, command[1]+" is not a valid command!")
 }
 
-func isAdmin(pl *event.PowerLevelsEventContent, roomID id.RoomID, userID id.UserID) bool {
-	bp, kp, rp := pl.Ban(), pl.Kick(), pl.Redact()
+// basic pow function
+func intPow(x, y int) int {
+	switch {
+	case y == 0 || x == 1:
+		return 1
+	case y == 1:
+		return x
+	}
+	r := x
+	for i := 2; i <= y; i++ {
+		r = r * x
+	}
+	return r
+}
 
-	minInt := func(i ...int) (m int) {
-		m = i[0]
-		for _, v := range i {
-			if v < m {
-				m = v
-			}
-		}
+func retryBackoff(err mautrix.HTTPError, retries int) int {
+	if !err.Is(mautrix.MLimitExceeded) || retries > 4 {
+		return -1
+	}
+	return 1000 * intPow(2, retries)
+}
+
+func isRetry(err mautrix.HTTPError) bool {
+	if !err.Is(mautrix.MLimitExceeded) {
+		return false
+	}
+	err.Response.Header.Get("Retry-After")
+	return true
+}
+
+// sendNotice is a wrapper around Client.SendNotice that logs when sending a
+// notice fails.
+func sendNotice(roomID id.RoomID, text string) (resp *mautrix.RespSendEvent) {
+	var retries int
+	err := handleLimit(retries, func() (e error) {
+		resp, e = Client.SendNotice(roomID, text)
 		return
+	})
+	if err != nil {
+		log.Println("could not send notice into room", roomID, "failed with error:", err)
+	}
+	return
+}
+
+// handleLimit automatically handles the rate limit, utilizing exponential
+// backoff.
+func handleLimit(retries int, f func() error) error {
+	<-limit
+	err, ok := f().(mautrix.HTTPError)
+	if !ok || !err.Is(mautrix.MLimitExceeded) {
+		return nil
 	}
 
-	return pl.GetUserLevel(userID) >= minInt(bp, kp, rp)
+	if retries < 5 {
+		s := intPow(2, retries)
+		time.Sleep(time.Second * time.Duration(s))
+		retries++
+		return handleLimit(retries, f)
+	}
+	return err
+}
+
+// sendReply sends a message as a reply to another message.
+func sendReply(ev event.Event, s string) (resp *mautrix.RespSendEvent, err error) {
+	var retries int
+	handleLimit(retries, func() error {
+		resp, err = Client.SendMessageEvent(ev.RoomID, event.EventMessage, &event.MessageEventContent{
+			MsgType: event.MsgText,
+			Body:    s,
+			RelatesTo: &event.RelatesTo{
+				Type:    event.RelReply,
+				EventID: ev.ID,
+			},
+		})
+		return err
+	})
+	return
+}
+
+func minAdmin(pl *event.PowerLevelsEventContent) (min int) {
+	min = pl.Ban()
+
+	k, r := pl.Kick(), pl.Redact()
+	if k < min {
+		min = k
+	}
+	if r < min {
+		min = r
+	}
+	return min
 }
 
 // isAdmin returns whether the user is a room admin by checking ban/kick/redact
 // power levels.
-func (f *Fallacy) isAdmin(roomID id.RoomID, userID id.UserID) bool {
-	pl, err := f.powerLevels(roomID)
+func isAdmin(roomID id.RoomID, userID id.UserID) bool {
+	pl, err := powerLevels(roomID)
 	if err != nil {
 		log.Println("fetching power levels event failed!")
 		return false
 	}
 
-	return isAdmin(&pl, roomID, userID)
+	return pl.GetUserLevel(userID) >= minAdmin(&pl)
 }
 
-// Checks whether the fallacy bot has perms.
-func (f *Fallacy) hasPerms(roomID id.RoomID, event event.Type) bool {
-	pl, err := f.powerLevels(roomID)
+// hasPerms checks whether the fallacy bot has perms.
+func hasPerms(roomID id.RoomID, event event.Type) bool {
+	pl, err := powerLevels(roomID)
 	if err != nil {
 		log.Println("fetching power levels event failed with error", err)
 		return false
 	}
 
-	if pl.GetEventLevel(event) > pl.GetUserLevel(f.Client.UserID) {
+	if pl.GetEventLevel(event) > pl.GetUserLevel(Client.UserID) {
 		return false
 	}
 	return true
 }
 
 // BanServer bans a server by adding it to the room ACL.
-func (f *Fallacy) BanServer(roomID id.RoomID, homeserverID string) (err error) {
-	if !f.hasPerms(roomID, event.StateServerACL) {
-		f.attemptSendNotice(roomID, permsMessage)
+func BanServer(roomID id.RoomID, homeserver string) (err error) {
+	if !hasPerms(roomID, event.StateServerACL) {
+		sendNotice(roomID, permsMessage)
 		return
 	}
 
-	acls, err := f.acls(roomID)
+	glb, err := glob.Compile(homeserver)
+	if err != nil {
+		sendNotice(roomID, "not a valid glob pattern!")
+		return
+	}
+
+	_, hs, _ := Client.UserID.Parse()
+	if !glb.Match(hs) {
+		sendNotice(roomID, "Refusing to ban own homeserver...")
+		return
+	}
+
+	acls, err := acls(roomID)
 	if err != nil {
 		return
 	}
 
-	for _, server := range acls.Allow {
-		if server == homeserverID {
+	for _, s := range acls.Allow {
+		if s == homeserver {
 			return
 		}
 	}
 
 	for _, server := range acls.Deny {
-		if server == homeserverID {
+		if server == homeserver {
 			return
 		}
 	}
 
-	acls.Deny = append(acls.Deny, homeserverID)
-	_, err = f.Client.SendStateEvent(roomID, event.StateServerACL, "", &acls)
+	acls.Deny = append(acls.Deny, homeserver)
+	_, err = Client.SendStateEvent(roomID, event.StateServerACL, "", &acls)
 	return
 }
 
 // MuteUser mutes a target user in a specified room by utilizing power levels.
-func (f *Fallacy) MuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
-	pl, err := f.powerLevels(roomID)
+func MuteUser(body []string, ev event.Event) {
+	pl, err := powerLevels(ev.RoomID)
 	if err != nil {
+		log.Println(err)
 		return
 	}
 
-	level := pl.GetEventLevel(event.EventMessage) - 1
-	if pl.GetUserLevel(targetID) <= level {
-		const e = "cannot mute a user that is not muted"
-		f.attemptSendNotice(roomID, e)
-		return errors.New(e)
-	}
+	targetID := id.UserID(body[0])
 
+	level := pl.GetEventLevel(event.EventMessage)
+	if pl.GetUserLevel(targetID) < level {
+		sendNotice(ev.RoomID, "cannot mute a user that is already muted")
+		return
+	}
 	pl.SetUserLevel(targetID, level)
-	_, err = f.Client.SendStateEvent(roomID, event.StatePowerLevels, "", &pl)
-	return
-}
-
-// MuteUsers mutes multiple users of a slice.
-// This could probably be optimized.
-func (f *Fallacy) MuteUsers(users []string, ev event.Event) {
-	if !f.hasPerms(ev.RoomID, event.StatePowerLevels) {
-		f.attemptSendNotice(ev.RoomID, permsMessage)
+	if _, err := Client.SendStateEvent(ev.RoomID, event.StatePowerLevels, "", &pl); err != nil {
+		sendNotice(ev.RoomID, "could not mute user! failed with: "+err.Error())
 		return
 	}
-
-	for _, u := range users {
-		if err := f.MuteUser(ev.RoomID, id.UserID(u)); err != nil {
-			log.Println("muting user", u, "failed with", err)
-			continue
-		}
-
-		r, err := f.roomName(ev.RoomID)
-		if err != nil {
-			log.Println("could not get room name, failed with", err)
-		}
-
-		n := ev.RoomID.String()
-		if r.Name != "" && r.Name != " " {
-			n = r.Name
-		}
-		msg := strings.Join([]string{u, "was muted by", ev.Sender.String(), "in", n}, " ")
-		f.attemptSendNotice(ev.RoomID, msg)
-	}
+	msg := strings.Join([]string{body[0], "was muted by", ev.Sender.String(), "in", ev.RoomID.String()}, " ")
+	sendNotice(ev.RoomID, msg)
+	return
 }
 
 // UnmuteUser unmutes a target user in a specified room by utilizing power levels.
-func (f *Fallacy) UnmuteUser(roomID id.RoomID, targetID id.UserID) (err error) {
-	pl, err := f.powerLevels(roomID)
+func UnmuteUser(body []string, ev event.Event) {
+	pl, err := powerLevels(ev.RoomID)
 	if err != nil {
+		log.Println(err)
 		return
 	}
+
+	targetID := id.UserID(body[0])
 
 	level := pl.GetEventLevel(event.EventMessage)
 	if pl.GetUserLevel(targetID) >= level {
-		const e = "cannot unmute a user that is not muted"
-		f.attemptSendNotice(roomID, e)
-		return errors.New(e)
+		sendNotice(ev.RoomID, "cannot unmute a user that is not muted")
+		return
 	}
-
 	pl.SetUserLevel(targetID, level)
-	_, err = f.Client.SendStateEvent(roomID, event.StatePowerLevels, "", &pl)
+	if _, err := Client.SendStateEvent(ev.RoomID, event.StatePowerLevels, "", &pl); err != nil {
+		sendNotice(ev.RoomID, "could not unmute user! failed with: "+err.Error())
+		return
+	}
+	msg := strings.Join([]string{body[0], "was unmuted by", ev.Sender.String(), "in", ev.RoomID.String()}, " ")
+	sendNotice(ev.RoomID, msg)
 	return
 }
 
-// UnmuteUsers mutes multiple users of a slice.
-// This could probably be optimized.
-func (f *Fallacy) UnmuteUsers(users []string, ev event.Event) {
-	if !f.hasPerms(ev.RoomID, event.StatePowerLevels) {
-		f.attemptSendNotice(ev.RoomID, permsMessage)
-		return
-	}
-
-	for _, u := range users {
-		if err := f.UnmuteUser(ev.RoomID, id.UserID(u)); err != nil {
-			log.Println("unmuting user", u, "failed with", err)
-			continue
-		}
-
-		r, err := f.roomName(ev.RoomID)
-		if err != nil {
-			log.Println("could not get room name, failed with", err)
-		}
-
-		n := ev.RoomID.String()
-		if r.Name != "" && r.Name != " " {
-			n = r.Name
-		}
-		msg := strings.Join([]string{u, "was unmuted by", ev.Sender.String(), "in", n}, " ")
-		f.attemptSendNotice(ev.RoomID, msg)
-	}
-}
-
 // PinMessage pins the replied-to event.
-func (f *Fallacy) PinMessage(_ []string, ev event.Event) {
-	if !f.hasPerms(ev.RoomID, event.StatePinnedEvents) {
-		f.attemptSendNotice(ev.RoomID, permsMessage)
+func PinMessage(body []string, ev event.Event) {
+	if !hasPerms(ev.RoomID, event.StatePinnedEvents) {
+		sendNotice(ev.RoomID, permsMessage)
 		return
 	}
 
 	relatesTo := ev.Content.AsMessage().RelatesTo
 	if relatesTo == nil {
-		f.attemptSendNotice(ev.RoomID, "Reply to the message you want to pin!")
+		sendNotice(ev.RoomID, "Reply to the message you want to pin!")
 		return
 	}
 
 	p := event.PinnedEventsEventContent{}
 	// Avoid handling this error. The pinned event may not exist.
-	f.Client.StateEvent(ev.RoomID, event.StatePinnedEvents, "", &p)
+	Client.StateEvent(ev.RoomID, event.StatePinnedEvents, "", &p)
 
 	p.Pinned = append(p.Pinned, relatesTo.EventID)
-	f.Client.SendStateEvent(ev.RoomID, event.StatePinnedEvents, "", &p)
+	Client.SendStateEvent(ev.RoomID, event.StatePinnedEvents, "", &p)
 }
 
 // SayMessage sends a message into the chat.
-func (f *Fallacy) SayMessage(message []string, ev event.Event) {
-	msg := strings.Join(message, " ")
-	f.attemptSendNotice(ev.RoomID, msg)
+func SayMessage(body []string, ev event.Event) {
+	msg := strings.Join(body, " ")
+	sendNotice(ev.RoomID, msg)
 }

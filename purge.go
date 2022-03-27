@@ -6,7 +6,7 @@ package fallacy
 
 import (
 	"log"
-	"time"
+	"strconv"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -19,50 +19,84 @@ const fetchLimit = 1000
 
 // RedactMessage only redacts message events, skipping redaction events, already
 // redacted events, and state events.
-func (f *Fallacy) RedactMessage(ev event.Event) (err error) {
+func RedactMessage(ev event.Event) (err error) {
 	if ev.StateKey != nil {
 		return
 	}
 
 	if ev.Type != event.EventRedaction && ev.Unsigned.RedactedBecause == nil {
-		_, err = f.Client.RedactEvent(ev.RoomID, ev.ID, mautrix.ReqRedact{})
+		var retries int
+		handleLimit(retries, func() error {
+			_, err = Client.RedactEvent(ev.RoomID, ev.ID, mautrix.ReqRedact{})
+			return err
+		})
 	}
 	return
 }
 
-func (f *Fallacy) redactUsers(users []string, ev event.Event) {
-	for _, u := range users {
-		if id.UserID(u) != ev.Sender {
-			continue
-		}
-		go f.RedactMessage(ev)
+func redactUser(user id.UserID, ev event.Event) (err error) {
+	if ev.Sender != user {
+		return nil
 	}
+	return RedactMessage(ev)
 }
 
-// PurgeUsers redacts all messages sent by the specified users.
-func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
-	if !f.hasPerms(ev.RoomID, event.EventRedaction) {
-		f.attemptSendNotice(ev.RoomID, permsMessage)
+func PurgeUser(body []string, ev event.Event) {
+	if !hasPerms(ev.RoomID, event.EventRedaction) {
+		sendNotice(ev.RoomID, permsMessage)
 		return
 	}
 
-	filter := purgeUserFilter(users)
-	msg, err := f.Client.Messages(ev.RoomID, "", "", 'b', &filter, fetchLimit)
+	user := id.UserID(body[0])
+
+	var (
+		max   int
+		limit bool
+	)
+
+	if len(body) > 1 {
+		d, err := strconv.Atoi(body[1])
+		if err != nil {
+			sendNotice(ev.RoomID, "not a valid integer of messages to purge")
+			return
+		}
+		max = d
+		limit = true
+	}
+
+	filter := userFilter(user)
+	msg, err := Client.Messages(ev.RoomID, "", "", 'b', &filter, fetchLimit)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	var prevEnd string
-	for msg.End != prevEnd {
-		prevEnd = msg.End
+	if msg == nil {
+		log.Println("/messages response was nil, server has nothing to send us")
+	}
+
+	var (
+		prev string
+		i    int
+	)
+
+	for msg.End != prev {
+		prev = msg.End
 		for _, e := range msg.Chunk {
-			if e == nil {
-				continue
+			if limit {
+				if i >= max {
+					sendNotice(ev.RoomID, "Purging messages done!")
+					return
+				}
+				i++
 			}
-			go f.redactUsers(users, *e)
+			go func(e event.Event) {
+				if err := redactUser(user, e); err != nil {
+					log.Println(err)
+				}
+			}(*e)
 		}
-		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, fetchLimit)
+		msg, err = Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, fetchLimit)
 		if err != nil {
 			log.Println(err)
 			return
@@ -72,24 +106,24 @@ func (f *Fallacy) PurgeUsers(users []string, ev event.Event) {
 
 // PurgeMessages redacts all message events newer than the specified event ID.
 // It's loosely inspired by Telegram's SophieBot mechanics.
-func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
-	if !f.hasPerms(ev.RoomID, event.EventRedaction) {
-		f.attemptSendNotice(ev.RoomID, permsMessage)
+func PurgeMessages(body []string, ev event.Event) {
+	if !hasPerms(ev.RoomID, event.EventRedaction) {
+		sendNotice(ev.RoomID, permsMessage)
 		return
 	}
 	relate := ev.Content.AsMessage().RelatesTo
 	if relate == nil {
-		f.attemptSendNotice(ev.RoomID, "Reply to the message you want to purge!")
+		sendNotice(ev.RoomID, "Reply to the message you want to purge!")
 		return
 	}
-	c, err := f.Client.Context(ev.RoomID, relate.EventID, &purgeFilter, 1)
+	c, err := Client.Context(ev.RoomID, relate.EventID, &purgeFilter, 1)
 	if err != nil {
 		log.Println("fetching context failed with error", err)
 		return
 	}
-	go f.RedactMessage(*c.Event)
+	go RedactMessage(*c.Event)
 
-	msg, err := f.Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, fetchLimit)
+	msg, err := Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, fetchLimit)
 	if err != nil {
 		log.Println("fetching messages failed with error:", err)
 		return
@@ -101,25 +135,19 @@ func (f *Fallacy) PurgeMessages(_ []string, ev event.Event) {
 	}
 
 	msg.Chunk = append(c.EventsAfter, msg.Chunk...)
-	buf := make(chan bool, 50)
 	for {
 		for _, e := range msg.Chunk {
 			go func(e event.Event) {
-				buf <- true
-				f.RedactMessage(e)
-				<-buf
+				if err := RedactMessage(e); err != nil {
+					log.Println(err)
+				}
 			}(*e)
 			if e.ID == ev.ID {
-				resp := f.attemptSendNotice(ev.RoomID, "Purging messages done! This message will be removed in 5 seconds...")
-				time.AfterFunc(5*time.Second, func() {
-					if _, err := f.Client.RedactEvent(ev.RoomID, resp.EventID, mautrix.ReqRedact{}); err != nil {
-						log.Println(err)
-					}
-				})
+				sendNotice(ev.RoomID, "Purging messages done!")
 				return
 			}
 		}
-		msg, err = f.Client.Messages(ev.RoomID, msg.End, "", 'f', &purgeFilter, fetchLimit)
+		msg, err = Client.Messages(ev.RoomID, msg.End, "", 'f', &purgeFilter, fetchLimit)
 		if err != nil {
 			log.Println(err)
 			return

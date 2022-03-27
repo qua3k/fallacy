@@ -2,249 +2,101 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-// fallacy provides wrappers around the less-pretty mautrix/go package. It's
-// mainly meant for fallacy bot use but can be imported to other packages.
-
+// Package fallacy implements the fallacy bot library.
+//
+// It's structured as a library to allow for easy code reuse but it isn't really
+// applicable to other Clients unless modified.
 package fallacy
 
 import (
-	"bufio"
-	"log"
-	"math/rand"
-	"strings"
 	"sync"
+	"time"
 
-	"github.com/gobwas/glob"
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-const stickerServer = "spitetech.com"
-const usage = "Hey, check out the usage guide at https://github.com/qua3k/fallacy/blob/main/USAGE.md"
-
-// The fallacy stickers we can use.
-var stickers = [...]id.ContentURI{
-	{
-		Homeserver: stickerServer,
-		FileID:     "XFgJMFCXulNthUiFUDqoEzuD",
-	},
-	{
-		Homeserver: stickerServer,
-		FileID:     "rpDChtvmojnErFdIZgfKktJW",
-	},
-	{
-		Homeserver: stickerServer,
-		FileID:     "KLJKMzTyTYKiHdHKSYKtNVXb",
-	},
-	{
-		Homeserver: stickerServer,
-		FileID:     "EdDSfNluLxYOfJmFKTDSXmaG",
-	},
-	{
-		Homeserver: stickerServer,
-		FileID:     "ziTJliFmgUpxCTXgyjSMvNKA",
-	},
-}
-
-// Configuration options for the bot.
 type Config struct {
-	Lock    sync.RWMutex
-	Firefox bool     // should we harass firefox users
-	Name    string   // the name of the bot
-	Rules   []string // user rules; can be glob
-	Welcome bool     // whether to welcome new members on join
+	Homeserver string
+	Username   string
+	Password   string
+	Name       string
 }
 
-// The main Fallacy struct containing the client and config.
-type Fallacy struct {
-	Client   *mautrix.Client
-	Config   *Config
-	Handlers map[string][]Callback
-}
+// New initializes the library and should be called before any other functions.
+// It is safe to call more than once, as it is only initialized once.
+func New(c Config) (err error) {
+	once.Do(func() {
+		lock.Lock()
+		defer lock.Unlock()
 
-// NewConfig instantiates a new Config struct.
-func NewConfig(firefox bool, name string, rules []string, welcome bool) Config {
-	return Config{
-		Firefox: firefox,
-		Name:    name,
-		Rules:   rules,
-		Welcome: welcome,
-	}
-}
+		newClient, e := mautrix.NewClient(c.Homeserver, id.UserID(c.Username), "")
+		if e != nil {
+			err = e
+			return
+		}
 
-// NewFallacy instantiates a new Fallacy struct.
-func NewFallacy(homeserverURL, userID, accessToken string, config *Config) (*Fallacy, error) {
-	cli, err := mautrix.NewClient(homeserverURL, id.UserID(userID), accessToken)
-	if err != nil {
-		return &Fallacy{}, err
-	}
-
-	return &Fallacy{
-		Client:   cli,
-		Config:   config,
-		Handlers: make(map[string][]Callback),
-	}, nil
-}
-
-// isUnreadable returns whether a line is prefixed with an unreadable constant.
-func isUnreadable(s byte) bool {
-	switch s {
-	case '*', '>':
-		return true
-	}
-	return false
-}
-
-// SendFallacy sends a random fallacy into the chat. Users of this should
-// explicitly call rand.Seed().
-func SendFallacy(c *mautrix.Client, roomID id.RoomID) (err error) {
-	const (
-		defaultSize = 256
-		length      = len(stickers)
-	)
-
-	u := stickers[rand.Intn(length)]
-	_, err = c.SendMessageEvent(roomID, event.EventSticker, &event.MessageEventContent{
-		Body: "no firefox here",
-		Info: &event.FileInfo{
-			Height: defaultSize,
-			ThumbnailInfo: &event.FileInfo{
-				Height: defaultSize,
-				Width:  defaultSize,
-			},
-			ThumbnailURL: u.CUString(),
-			Width:        defaultSize,
-		},
-		URL: u.CUString(),
+		Client = newClient
+		handles = defaultHandles
 	})
 	return
 }
 
-// attemptSendNotice wraps Client.SendNotice, logging when a notice is unable to
-// be sent.
-func (f *Fallacy) attemptSendNotice(roomID id.RoomID, text string) *mautrix.RespSendEvent {
-	if resp, err := f.Client.SendNotice(roomID, text); err == nil {
-		return resp
-	}
-	msg := strings.Join([]string{"could not send notice", text, "into room", roomID.String()}, " ")
-	log.Println(msg)
-	return nil
-}
-
-// sendReply sends a message as a reply to another message.
-func (f *Fallacy) sendReply(ev event.Event, s string) (*mautrix.RespSendEvent, error) {
-	return f.Client.SendMessageEvent(ev.RoomID, event.EventMessage, &event.MessageEventContent{
-		MsgType: event.MsgText,
-		Body:    s,
-		RelatesTo: &event.RelatesTo{
-			Type:    event.RelReply,
-			EventID: ev.ID,
+func Login(c Config) error {
+	_, err := Client.Login(&mautrix.ReqLogin{
+		Identifier: mautrix.UserIdentifier{
+			User: c.Username,
+			Type: mautrix.IdentifierTypeUser,
 		},
+		InitialDeviceDisplayName: c.Name,
+		Password:                 c.Password,
+		StoreCredentials:         true,
+		Type:                     mautrix.AuthTypePassword,
 	})
+	return err
 }
 
-// HandleUserPolicy handles m.policy.rule.user events. Initially limited to
-// room admins but could possibly be extended to members of specific rooms.
-func (f *Fallacy) HandleUserPolicy(_ mautrix.EventSource, ev *event.Event) {
-	if ev.Sender == f.Client.UserID {
-		return
-	}
-
-	switch ev.Content.Raw["recommendation"].(string) {
-	case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove non-spec mjolnir recommendation
-		g, err := glob.Compile(ev.Content.Raw["entity"].(string))
-		if err != nil {
-			f.attemptSendNotice(ev.RoomID, "not a valid glob pattern!")
-			return
-		}
-		if err := f.GlobBanJoinedRooms(g); err != nil {
-			log.Println(err)
-		}
-	}
+func enableFirefox(b bool) {
+	lock.Lock()
+	defer lock.Unlock()
+	firefox = b
 }
 
-// HandleServerPolicy handles m.policy.rule.server events. Initially limited to
-// room admins but could possibly be extended to members of specific rooms.
-func (f *Fallacy) HandleServerPolicy(_ mautrix.EventSource, ev *event.Event) {
-	if ev.Sender == f.Client.UserID {
-		return
-	}
-
-	switch ev.Content.Raw["recommendation"].(string) {
-	case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove non-spec mjolnir recommendation
-		e := ev.Content.Raw["entity"].(string)
-		if err := f.BanServerJoinedRooms(e); err != nil {
-			log.Println(err)
-		}
-	}
+func enableWelcome(b bool) {
+	lock.Lock()
+	defer lock.Unlock()
+	welcome = b
 }
 
-// HandleMember handles `m.room.member` events.
-func (f *Fallacy) HandleMember(s mautrix.EventSource, ev *event.Event) {
-	mem := ev.Content.AsMember()
-	if mem == nil {
-		log.Println("HandleMember failed, got a nil pointer!")
-		return
-	}
+var (
+	// mutex protecting this block
+	lock sync.RWMutex
 
-	tl := s & mautrix.EventSourceTimeline
-	if f.Config.Welcome && isNewJoin(*ev) && tl > 0 {
-		display, sender, room := mem.Displayname, ev.Sender, ev.RoomID
-		if err := f.WelcomeMember(display, sender, room); err != nil {
-			log.Println(err)
-		}
-	}
-}
+	// initialize this block one time only
+	once sync.Once
 
-// HandleMessage handles m.room.message events.
-func (f *Fallacy) HandleMessage(_ mautrix.EventSource, ev *event.Event) {
-	if ev.Sender == f.Client.UserID {
-		return
-	}
+	// Client is the currently connected Client
+	Client *mautrix.Client
 
-	msg := ev.Content.AsMessage()
-	if msg == nil {
-		log.Println("HandleMessage failed, got a nil pointer!")
-		return
-	}
+	// handles are the current handlers
+	handles map[string][]Callback
 
-	body := msg.Body
+	// limit are the allowed requests/second
+	limit = time.Tick(time.Millisecond * 200)
 
-	var once sync.Once
+	// some room specific settings, should be migrated...
+	firefox, welcome bool
+	// this is supposed to be join rules
+	rules []string
+)
 
-	scanner := bufio.NewScanner(strings.NewReader(body))
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Fields(line)
-		if len(fields) < 1 || isUnreadable(line[0]) {
-			continue
-		}
-
-		if l := strings.ToLower(line); f.Config.Firefox && strings.Contains(l, "firefox") {
-			once.Do(func() {
-				if err := SendFallacy(f.Client, ev.RoomID); err != nil {
-					log.Println(err)
-				}
-			})
-		}
-
-		if !strings.EqualFold("!"+f.Config.Name, fields[0]) {
-			continue
-		}
-		f.notifyListeners(fields, *ev)
-	}
-}
-
-// HandleTombStone handles m.room.tombstone events, automatically joining the
-// new room.
-func (f *Fallacy) HandleTombstone(_ mautrix.EventSource, ev *event.Event) {
-	var (
-		room   = ev.Content.Raw["replacement_room"].(string)
-		reason = map[string]string{"reason": "following room upgrade"}
-	)
-	if _, err := f.Client.JoinRoom(room, "", reason); err != nil {
-		msg := strings.Join([]string{"attempting to join room", room, "failed with error:", err.Error()}, " ")
-		f.attemptSendNotice(ev.RoomID, msg)
-	}
+var defaultHandles = map[string][]Callback{
+	"ban":       {{BanUser, 1}},
+	"import":    {{ImportList, 1}},
+	"mute":      {{MuteUser, 1}},
+	"pin":       {{Function: PinMessage}},
+	"purge":     {{Function: PurgeMessages}},
+	"purgeuser": {{PurgeUser, 1}},
+	"say":       {{SayMessage, 1}},
+	"umute":     {{UnmuteUser, 1}},
 }

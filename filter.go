@@ -10,58 +10,40 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-var purgeFilter = mautrix.FilterPart{
-	LazyLoadMembers: true,
-	NotTypes: []event.Type{
-		event.EventRedaction,
-		// avoid fetching state events
-		event.StateAliases,
-		event.StateBridge,
-		event.StateCanonicalAlias,
-		event.StateCreate,
-		event.StateEncryption,
-		event.StateHalfShotBridge,
-		event.StateHistoryVisibility,
-		event.StateJoinRules,
-		event.StateMember,
-		event.StatePinnedEvents,
-		event.StatePowerLevels,
-		event.StateRoomAvatar,
-		event.StateRoomName,
-		event.StateSpaceChild,
-		event.StateTombstone,
-		event.StateTopic,
-	},
+// stateType are the omitted state event types.
+var stateType = []event.Type{
+	event.EventRedaction,
+	event.StateAliases,
+	event.StateCanonicalAlias,
+	event.StateCreate,
+	event.StateJoinRules,
+	event.StateHistoryVisibility,
+	event.StateGuestAccess,
+	event.StateMember,
+	event.StatePowerLevels,
+	event.StateRoomName,
+	event.StateTopic,
+	event.StateRoomAvatar,
+	event.StatePinnedEvents,
+	event.StateServerACL,
+	event.StateTombstone,
+	event.StatePolicyRoom,
+	event.StatePolicyServer,
+	event.StatePolicyUser,
+	event.StateEncryption,
+	event.StateBridge,
+	event.StateHalfShotBridge,
+	event.StateSpaceChild,
+	event.StateSpaceParent,
 }
 
-func purgeUserFilter(users []string) mautrix.FilterPart {
-	userIDs := make([]id.UserID, len(users))
-	for i, u := range users {
-		userIDs[i] = id.UserID(u)
-	}
+// purgeFilter is the standard filter for purging messages, omitting state events.
+var purgeFilter = mautrix.FilterPart{LazyLoadMembers: true, NotTypes: stateType}
 
+func userFilter(user id.UserID) mautrix.FilterPart {
 	return mautrix.FilterPart{
 		LazyLoadMembers: true,
-		NotTypes: []event.Type{
-			event.EventRedaction,
-			// avoid fetching state events
-			event.StateAliases,
-			event.StateBridge,
-			event.StateCanonicalAlias,
-			event.StateCreate,
-			event.StateEncryption,
-			event.StateHalfShotBridge,
-			event.StateHistoryVisibility,
-			event.StateJoinRules,
-			event.StateMember,
-			event.StatePinnedEvents,
-			event.StatePowerLevels,
-			event.StateRoomAvatar,
-			event.StateRoomName,
-			event.StateSpaceChild,
-			event.StateTombstone,
-			event.StateTopic,
-		},
-		Senders: userIDs,
+		NotTypes:        stateType,
+		Senders:         []id.UserID{user},
 	}
 }

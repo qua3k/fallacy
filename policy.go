@@ -5,198 +5,213 @@
 package fallacy
 
 import (
+	"errors"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/gobwas/glob"
+	"golang.org/x/sync/errgroup"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-// the reason for the season
-const globBanReason = "u jus got glob ban"
+var errNotUser error = errors.New("could not ban user, not a valid glob or user id!")
 
-// AddJoinRule adds a join rule to ban users on sight.
-func (f *Fallacy) AddJoinRule(rule string) {
-	// TODO: evaluate speed of rlock/runlock/lock/unlock
-	f.Config.Lock.Lock()
-	defer f.Config.Lock.Unlock()
+/*
+ * // isRetry determines if the error is a 429.
+ * func isRetry(err error) bool {
+ * 	if e, ok := err.(mautrix.HTTPError); ok {
+ * 		if e.IsStatus(429) {
+ * 			return true
+ * 		}
+ * 	}
+ * 	return false
+ * }
+ */
 
-	for _, r := range f.Config.Rules {
-		if r == rule {
-			return
-		}
-	}
-	f.Config.Rules = append(f.Config.Rules, rule)
-}
-
-// DeleteJoinRule deletes the rule, if it exists.
-func (f *Fallacy) DeleteJoinRule(rule string) {
-	f.Config.Lock.Lock()
-	defer f.Config.Lock.Unlock()
-
-	for i, r := range f.Config.Rules {
-		if r != rule {
-			continue
-		}
-		f.Config.Rules = append(f.Config.Rules[:i], f.Config.Rules[i+1:]...)
-	}
-}
-
-func (f *Fallacy) banWithReason(roomID id.RoomID, userID id.UserID, reason string) (err error) {
-	_, err = f.Client.BanUser(roomID, &mautrix.ReqBanUser{
-		Reason: reason,
-		UserID: userID,
-	})
-	return
-}
-
-type ban struct {
-	Glob   glob.Glob
+type options struct {
+	User   string
 	RoomID id.RoomID
 
-	Join  mautrix.RespJoinedMembers
-	Power *event.PowerLevelsEventContent
+	Joined *mautrix.RespJoinedMembers
+	Power  *event.PowerLevelsEventContent
 }
 
-func (f *Fallacy) banUsers(b ban) {
-	for user := range b.Join.Joined {
-		if u := user.String(); !b.Glob.Match(u) {
-			continue
-		}
-		if isAdmin(b.Power, b.RoomID, user) {
-			const adminBanMessage = "Haha, let's /demote him first."
-			f.attemptSendNotice(b.RoomID, adminBanMessage)
+// globBan bans any member in the room matching the specified glob. It returns
+// an error on the first non-nil error.
+func globBan(roomID id.RoomID, glb glob.Glob, jm *mautrix.RespJoinedMembers,
+	pl *event.PowerLevelsEventContent) (err error) {
+	if jm == nil {
+		jm, err = Client.JoinedMembers(roomID)
+		if err != nil {
 			return
 		}
-		if err := f.banWithReason(b.RoomID, user, globBanReason); err != nil {
-			f.attemptSendNotice(b.RoomID, err.Error())
-		}
 	}
+
+	if pl == nil {
+		p, err := powerLevels(roomID)
+		if err != nil {
+			return err
+		}
+		pl = &p
+	}
+
+	var g errgroup.Group
+	for user := range jm.Joined {
+		if m := minAdmin(pl); !glb.Match(string(user)) || pl.GetUserLevel(user) >= m {
+			continue
+		}
+		u := user
+		g.Go(func() error {
+			_, err := Client.BanUser(roomID, &mautrix.ReqBanUser{
+				Reason: "u jus got glob ban",
+				UserID: u,
+			})
+			return err
+		})
+	}
+	return g.Wait()
 }
 
-// BanUsers glob bans a slice of users expressed as globs.
-func (f *Fallacy) BanUsers(globs []string, ev event.Event) {
-	pl, err := f.powerLevels(ev.RoomID)
-	if err != nil {
+// Interactively bans a user based on whether they are a glob or a MXID.
+//
+// The glob matching is able to do matching with a literal but structuring it
+// this way allows users to preemptively ban problematic users.
+func matchBan(opt options) error {
+	switch {
+	case strings.Contains(opt.User, "*"), strings.Contains(opt.User, "?"):
+		glb, err := glob.Compile(opt.User)
+		if err != nil {
+			return err
+		}
+		return globBan(opt.RoomID, glb, opt.Joined, opt.Power)
+	case strings.HasPrefix(opt.User, "@"):
+		_, err := Client.BanUser(opt.RoomID, &mautrix.ReqBanUser{
+			UserID: id.UserID(opt.User),
+		})
+		return err
+	}
+	return errNotUser
+}
+
+func MatchBan(user string, roomID id.RoomID) error {
+	return matchBan(options{
+		User:   user,
+		RoomID: roomID,
+	})
+}
+
+func MatchMembers(user string, roomID id.RoomID, jm *mautrix.RespJoinedMembers,
+	pl *event.PowerLevelsEventContent) error {
+	return matchBan(options{
+		User:   user,
+		RoomID: roomID,
+		Joined: jm,
+		Power:  pl,
+	})
+
+}
+
+// BanUser bans a glob or MXID from the room.
+func BanUser(body []string, ev event.Event) {
+	if !hasPerms(ev.RoomID, event.StateMember) {
+		sendNotice(ev.RoomID, permsMessage)
+		return
+	}
+
+	user := body[0]
+	if err := MatchBan(user, ev.RoomID); err == errNotUser {
+		sendNotice(ev.RoomID, err.Error())
+		return
+	} else if err != nil {
+		sendNotice(ev.RoomID, "failed to ban with: "+err.Error())
 		log.Println(err)
 		return
 	}
-
-	if pl.Ban() > pl.GetUserLevel(f.Client.UserID) {
-		f.attemptSendNotice(ev.RoomID, permsMessage)
-		return
-	}
-
-	jm, err := f.Client.JoinedMembers(ev.RoomID)
-	if err != nil {
-		return
-	}
-
-	for _, glb := range globs {
-		go func(glb string) {
-			g, err := glob.Compile(glb)
-			if err != nil {
-				msg := strings.Join([]string{"compiling glob", glb, "failed!"}, " ")
-				f.attemptSendNotice(ev.RoomID, msg)
-				return
-			}
-			f.banUsers(ban{
-				Glob:   g,
-				RoomID: ev.RoomID,
-				Join:   *jm,
-				Power:  &pl,
-			})
-		}(glb)
-	}
+	sendNotice(ev.RoomID, "finished banning user!")
 }
 
-// GlobBanJoinedRooms utilizes the power of glob to ban users matching the glob
-// from all rooms the client is joined to, returning an error if unsuccessful.
-func (f *Fallacy) GlobBanJoinedRooms(glob glob.Glob) (err error) {
-	jr, err := f.Client.JoinedRooms()
+func banType(s map[event.Type]map[string]*event.Event, t event.Type, roomID id.RoomID) error {
+	var once sync.Once
+
+	pl, err := powerLevels(roomID)
 	if err != nil {
-		return
+		return err
 	}
 
-	for _, room := range jr.JoinedRooms {
-		go func(r id.RoomID) {
-			jm, err := f.Client.JoinedMembers(r)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			pl, err := f.powerLevels(r)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			f.banUsers(ban{
-				Glob:   glob,
-				RoomID: r,
-				Join:   *jm,
-				Power:  &pl,
-			})
-		}(room)
-	}
-	return
-}
-
-// BanServerJoinedRooms utilizes the power of ACL to add the server to ban
-// servers matching the ACL from all rooms the client is joined to, returning an
-// error if unsuccessful.
-func (f *Fallacy) BanServerJoinedRooms(homeserverID string) (err error) {
-	jr, err := f.Client.JoinedRooms()
+	jm, err := Client.JoinedMembers(roomID)
 	if err != nil {
-		return
+		return err
 	}
 
-	for _, room := range jr.JoinedRooms {
-		go func(r id.RoomID) {
-			if err := f.BanServer(r, homeserverID); err != nil {
-				msg := strings.Join([]string{"unable to ban", r.String(), "from room,", "failed with error:", err.Error()}, " ")
-				log.Println(msg)
-			}
-		}(room)
-	}
-	return
-}
-
-func (f *Fallacy) ImportList(body []string, ev event.Event) {
-	var (
-		room   = body[0]
-		prefix = room[0]
-	)
-
-	if prefix != '#' && prefix != '!' {
-		return
-	}
-
-	roomID := id.RoomID(room)
-	if roomID == ev.RoomID {
-		f.attemptSendNotice(ev.RoomID, "why are you attempting to import events from this room?")
-		return
-	}
-
-	if _, err := f.Client.JoinRoom(room, "", nil); err != nil {
-		if prefix == '#' {
-			r, err := f.Client.ResolveAlias(id.RoomAlias(room))
-			if err != nil {
-				log.Println("yea not a valid alias")
-				return
-			}
-			roomID = r.RoomID
+	for k, e := range s[t] {
+		r, ok := e.Content.Raw["recommendation"].(string)
+		if !ok {
+			continue
 		}
-		f.attemptSendNotice(roomID, "could not join room!")
+
+		switch r {
+		case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove legacy mjolnir ban
+			_, err := Client.SendStateEvent(roomID, event.StatePolicyUser, k, &e.Content)
+			if err != nil {
+				log.Println(err)
+				once.Do(func() {
+					sendNotice(roomID, "could not send state event, proceeding")
+				})
+			}
+
+			e, ok := e.Content.Raw["entity"].(string)
+			if !ok {
+				break
+			}
+			if err := MatchMembers(e, roomID, jm, &pl); err != nil {
+				log.Println(err)
+			}
+		}
+	}
+	return nil
+}
+
+// ImportList imports a banlist from another room.
+func ImportList(body []string, ev event.Event) {
+	if !hasPerms(ev.RoomID, event.StatePolicyUser) || !hasPerms(ev.RoomID, event.StateMember) {
+		sendNotice(ev.RoomID, permsMessage)
 		return
 	}
 
-	s, err := f.Client.State(roomID)
-	if err != nil {
+	roomID := id.RoomID(body[0])
+	if p := roomID[0]; p == '#' {
+		r, err := Client.ResolveAlias(id.RoomAlias(roomID))
+		if err != nil {
+			sendNotice(ev.RoomID, "Could not resolve room alias, failed with "+err.Error())
+			return
+		}
+		roomID = r.RoomID
+	} else if p != '!' {
+		sendNotice(ev.RoomID, "Not a valid room ID!")
 		return
 	}
-	for k, e := range s[event.StatePolicyUser] {
-		f.Client.SendStateEvent(ev.RoomID, event.StatePolicyUser, k, e)
+
+	if roomID == ev.RoomID {
+		sendNotice(ev.RoomID, "Refusing to import events from this room!")
+		return
 	}
+
+	if _, err := Client.JoinRoomByID(roomID); err != nil {
+		msg := strings.Join([]string{"could not join room", body[0], "failed with:", err.Error()}, " ")
+		sendNotice(ev.RoomID, msg)
+		return
+	}
+
+	s, err := Client.State(roomID)
+	if err != nil {
+		msg := strings.Join([]string{"could not import state from", body[0], "failed with:", err.Error()}, " ")
+		sendNotice(ev.RoomID, msg)
+	}
+
+	banType(s, event.StatePolicyUser, ev.RoomID)
+	banType(s, event.NewEventType("m.room.rule.user"), ev.RoomID)
+	sendNotice(ev.RoomID, "Finished importing list from "+body[0])
 }

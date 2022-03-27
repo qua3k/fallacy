@@ -5,7 +5,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -18,106 +17,53 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-const usage = `Usage:
-	fallacy -c config file`
+const usage = `
+(  __)/ _\ (  )  (  )   / _\  / __)( \/ )
+) _)/    \/ (_/\/ (_/\/    \( (__  )  / 
+(__) \_/\_/\____/\____/\_/\_/ \___)(__/  
 
-type tomlStruct struct {
-	Config        fallacy.Config
-	HomeserverUrl string
-	Username      string
-	Password      string
-}
+Usage: fallacy <config file>`
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
-
 func main() {
-
-	var (
-		configFile string = "config.toml"
-		homeserver string = "https://matrix-client.matrix.org"
-		t          tomlStruct
-	)
-
-	flag.Usage = func() { fmt.Fprintln(os.Stderr, usage) }
-	flag.StringVar(&configFile, "c", "", "config from `FILE` (default config.toml)")
-	flag.StringVar(&configFile, "config", "", "config from `FILE` (default config.toml)")
-	flag.Parse()
-
-	if len(os.Args) < 3 {
-		flag.Usage()
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(1)
 	}
 
-	md, err := toml.DecodeFile(configFile, &t)
-	if err != nil {
-		log.Fatal("decoding config file failed with error:", err)
+	var c fallacy.Config
+	if _, err := toml.DecodeFile(os.Args[1], &c); err != nil {
+		fmt.Fprintln(os.Stderr, "decoding config file failed with", err)
+		os.Exit(1)
 	}
 
-	if md.IsDefined("homeserverUrl") {
-		homeserver = t.HomeserverUrl
+	err := fallacy.New(c)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "creating fallacy struct failed with", err)
+		os.Exit(1)
 	}
 
-	f, err := fallacy.NewFallacy(homeserver, "", "", &t.Config)
+	err = fallacy.Login(c)
 	if err != nil {
-		log.Fatal("creating fallacy struct failed with:", err)
-	}
-
-	_, err = f.Client.Login(&mautrix.ReqLogin{
-		Identifier: mautrix.UserIdentifier{
-			User: t.Username,
-			Type: mautrix.IdentifierTypeUser,
-		},
-		InitialDeviceDisplayName: t.Config.Name,
-		Password:                 t.Password,
-		StoreCredentials:         true,
-		Type:                     "m.login.password",
-	})
-	if err != nil {
-		log.Fatalln("login failed with:", err)
+		fmt.Fprintf(os.Stderr, "logging into %s failed with %v\n", c.Homeserver, err)
+		os.Exit(1)
 	}
 
 	syncer := fallacy.NewFallacySyncer()
-	f.Client.Syncer = syncer
-	syncer.OnEventType(event.StatePolicyUser, f.HandleUserPolicy)
-	syncer.OnEventType(event.StateMember, f.HandleMember)
-	syncer.OnEventType(event.EventMessage, f.HandleMessage)
-	syncer.OnEventType(event.StateTombstone, f.HandleTombstone)
-	f.Register("ban", fallacy.Callback{
-		Function: f.BanUsers,
-		Min:      1,
-	})
-	f.Register("mute", fallacy.Callback{
-		Function: f.MuteUsers,
-		Min:      1,
-	})
-	f.Register("pin", fallacy.Callback{
-		Function: f.PinMessage,
-	})
-	f.Register("purge", fallacy.Callback{
-		Function: f.PurgeMessages,
-	})
-	f.Register("purgeuser", fallacy.Callback{
-		Function: f.PurgeUsers,
-		Min:      1,
-	})
-	f.Register("say", fallacy.Callback{
-		Function: f.SayMessage,
-		Min:      1,
-	})
-	f.Register("unmute", fallacy.Callback{
-		Function: f.MuteUsers,
-		Min:      1,
-	})
+	syncer.OnEventType(event.StatePolicyUser, fallacy.HandleUserPolicy)
+	syncer.OnEventType(event.StateMember, fallacy.HandleMember)
+	syncer.OnEventType(event.EventMessage, fallacy.HandleMessage)
+	syncer.OnEventType(event.StateTombstone, fallacy.HandleTombstone)
 
 	old := &mautrix.OldEventIgnorer{
-		UserID: f.Client.UserID,
+		UserID: fallacy.Client.UserID,
 	}
-
 	old.Register(syncer)
+	fallacy.Client.Syncer = syncer
 
-	if err := f.Client.Sync(); err != nil {
-		fmt.Println("Sync() returned", err)
+	if err := fallacy.Client.Sync(); err != nil {
+		log.Println("Sync() returned", err)
 	}
 }
