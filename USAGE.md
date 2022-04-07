@@ -1,5 +1,13 @@
 # Usage Guide
 
+## Table of Contents
+
+*   [Banning Users](#banning-users)
+*   [Muting/Unmuting Users (INCOMPLETE)](#mutingunmuting-users-incomplete)
+*   [Pinning Messages](#pinning-messages)
+*   [Purging Messages](#purging-messages)
+*   [Sockpuppet Functionality](#sockpuppet-functionality)
+
 ## Banning Users
 
 fallacy features functionality to ban MXIDs or globs of MXIDs.
