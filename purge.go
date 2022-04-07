@@ -77,7 +77,7 @@ func PurgeUser(body []string, ev event.Event) {
 	}
 
 	filter := userFilter(user)
-	msg, err := doMessages(Client.Messages(ev.RoomID, "", "", 'f', &filter, fetchLimit))
+	msg, err := doMessages(Client.Messages(ev.RoomID, "", "", 'b', &filter, fetchLimit))
 	if err != nil {
 		log.Println(err)
 	}
@@ -100,7 +100,7 @@ func PurgeUser(body []string, ev event.Event) {
 				}
 			}(*e)
 		}
-		if msg, err = doMessages(Client.Messages(ev.RoomID, "", "", 'f', &filter, fetchLimit)); err != nil {
+		if msg, err = doMessages(Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, fetchLimit)); err != nil {
 			log.Println(err)
 			return
 		}
