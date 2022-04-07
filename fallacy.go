@@ -95,8 +95,7 @@ var defaultHandles = map[string][]Callback{
 	"import":    {{ImportList, 1}},
 	"mute":      {{MuteUser, 1}},
 	"pin":       {{Function: PinMessage}},
-	"purge":     {{Function: PurgeMessages}},
-	"purgeuser": {{PurgeUser, 1}},
+	"purge":     {{Function: CommandPurge}},
 	"say":       {{SayMessage, 1}},
 	"umute":     {{UnmuteUser, 1}},
 }
