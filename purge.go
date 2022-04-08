@@ -34,24 +34,13 @@ func RedactMessage(ev event.Event) (err error) {
 	return
 }
 
+// redactUser is a simple wrapper around RedactMessage checking if the sender
+// matches the user ID.
 func redactUser(user id.UserID, ev event.Event) (err error) {
 	if ev.Sender != user {
 		return nil
 	}
 	return RedactMessage(ev)
-}
-
-func CommandPurge(body []string, ev event.Event) {
-	if !hasPerms(ev.RoomID, event.EventRedaction) {
-		sendNotice(ev.RoomID, permsMessage)
-		return
-	}
-
-	if len(body) > 0 {
-		PurgeUser(body, ev)
-		return
-	}
-	PurgeMessages(body, ev)
 }
 
 func doMessages(resp *mautrix.RespMessages, err error) (*mautrix.RespMessages, error) {
@@ -61,6 +50,9 @@ func doMessages(resp *mautrix.RespMessages, err error) (*mautrix.RespMessages, e
 	return resp, err
 }
 
+// PurgeUser redacts optionally a limit or all messages sent by a specified
+// user. This is implemented efficiently using a filter to only obtain the
+// events sent by the user.
 func PurgeUser(body []string, ev event.Event) {
 	user := id.UserID(body[0])
 
@@ -150,4 +142,18 @@ func PurgeMessages(body []string, ev event.Event) {
 			return
 		}
 	}
+}
+
+// CommandPurge is a simple function to be invoked by the purge keyword.
+func CommandPurge(body []string, ev event.Event) {
+	if !hasPerms(ev.RoomID, event.EventRedaction) {
+		sendNotice(ev.RoomID, permsMessage)
+		return
+	}
+
+	if len(body) > 0 {
+		PurgeUser(body, ev)
+		return
+	}
+	PurgeMessages(body, ev)
 }
