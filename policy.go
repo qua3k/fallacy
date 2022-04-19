@@ -116,7 +116,13 @@ func MatchMembers(user string, roomID id.RoomID, jm *mautrix.RespJoinedMembers,
 
 // BanUser bans a glob or MXID from the room.
 func BanUser(body []string, ev event.Event) {
-	if !hasPerms(ev.RoomID, event.StateMember) {
+	pl, err := powerLevels(ev.RoomID)
+	if err != nil {
+		sendNotice(ev.RoomID, "fetching power levels event failed with error "+err.Error())
+		return
+	}
+
+	if pl.Ban() > pl.GetUserLevel(Client.UserID) {
 		sendNotice(ev.RoomID, permsMessage)
 		return
 	}
