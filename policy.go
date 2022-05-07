@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/gobwas/glob"
 	"golang.org/x/sync/errgroup"
@@ -126,6 +127,7 @@ func matchBan(opt options) error {
 
 func processBans(evs map[string]*event.Event, roomID id.RoomID, members *mautrix.RespJoinedMembers,
 	power *event.PowerLevelsEventContent) {
+	var once sync.Once
 	for key, ev := range evs {
 		r, ok := ev.Content.Raw["recommendation"].(string)
 		if !ok {
