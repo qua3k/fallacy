@@ -102,10 +102,10 @@ func isRetry(err mautrix.HTTPError) bool {
 
 // sendNotice is a wrapper around Client.SendNotice that logs when sending a
 // notice fails.
-func sendNotice(roomID id.RoomID, text string) (resp *mautrix.RespSendEvent) {
+func sendNotice(roomID id.RoomID, text ...string) (resp *mautrix.RespSendEvent) {
 	var retries int
 	err := handleLimit(retries, func() (e error) {
-		resp, e = Client.SendNotice(roomID, text)
+		resp, e = Client.SendNotice(roomID, strings.Join(text, " "))
 		return
 	})
 	if err != nil {
@@ -171,7 +171,7 @@ func isAdmin(roomID id.RoomID, userID id.UserID) bool {
 		return false
 	}
 
-	return pl.GetUserLevel(userID) >= minAdmin(&pl)
+	return pl.GetUserLevel(userID) >= minAdmin(pl)
 }
 
 // hasPerms checks whether the fallacy bot has perms.

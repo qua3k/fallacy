@@ -10,7 +10,7 @@ import (
 )
 
 // powerLevels returns a power levels struct from the specified roomID.
-func powerLevels(roomID id.RoomID) (resp event.PowerLevelsEventContent, err error) {
+func powerLevels(roomID id.RoomID) (resp *event.PowerLevelsEventContent, err error) {
 	err = Client.StateEvent(roomID, event.StatePowerLevels, "", &resp)
 	return
 }

@@ -34,7 +34,7 @@ func HandleUserPolicy(s mautrix.EventSource, ev *event.Event) {
 	switch m.Recommendation {
 	// TODO: remove non-spec mjolnir recommendation
 	case "m.ban", "org.matrix.mjolnir.ban":
-		if err := MatchBan(m.Entity, ev.RoomID); err == errNotUser {
+		if err := matchBan(options{User: m.Entity, RoomID: ev.RoomID}); err == errNotUser {
 			sendNotice(ev.RoomID, "not a valid glob pattern!")
 		} else if err != nil {
 			log.Println(err)
@@ -112,7 +112,6 @@ func HandleTombstone(_ mautrix.EventSource, ev *event.Event) {
 		reason = map[string]string{"reason": "following room upgrade"}
 	)
 	if _, err := Client.JoinRoom(room, "", reason); err != nil {
-		msg := strings.Join([]string{"attempting to join room", room, "failed with error:", err.Error()}, " ")
-		sendNotice(ev.RoomID, msg)
+		sendNotice(ev.RoomID, "attempting to join room", room, "failed with error:", err.Error())
 	}
 }
