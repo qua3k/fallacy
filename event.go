@@ -111,7 +111,10 @@ func HandleTombstone(_ mautrix.EventSource, ev *event.Event) {
 		room   = ev.Content.Raw["replacement_room"].(string)
 		reason = map[string]string{"reason": "following room upgrade"}
 	)
-	if _, err := Client.JoinRoom(room, "", reason); err != nil {
+
+	// join via the sender's server as we're sure that they're in the room
+	_, server, _ := ev.Sender.ParseAndDecode()
+	if _, err := Client.JoinRoom(room, server, reason); err != nil {
 		sendNotice(ev.RoomID, "attempting to join room", room, "failed with error:", err.Error())
 	}
 }
