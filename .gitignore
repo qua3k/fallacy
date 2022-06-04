@@ -14,7 +14,20 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# cpu profiles
+cpuprofile
 
+# undone stuff
 undone.go
+
+# some configs
 *.toml
+
+# vscode
 .vscode/
+
+# macOS
+.DS_Store
+
+# patches
+*.patch
