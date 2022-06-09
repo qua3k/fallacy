@@ -3,9 +3,6 @@
 // license that can be found in the LICENSE file.
 
 // Package fallacy implements the fallacy bot library.
-//
-// It's structured as a library to allow for easy code reuse but it isn't really
-// applicable to other Clients unless modified.
 package fallacy
 
 import (
