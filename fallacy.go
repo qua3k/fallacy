@@ -72,6 +72,16 @@ func enableWelcome(b bool) {
 	welcome = b
 }
 
+var defaultHandles = map[string][]Callback{
+	"ban":    {{BanUser, 1}},
+	"import": {{ImportList, 1}},
+	"mute":   {{MuteUser, 1}},
+	"pin":    {{Function: PinMessage}},
+	"purge":  {{Function: CommandPurge}},
+	"say":    {{SayMessage, 1}},
+	"umute":  {{UnmuteUser, 1}},
+}
+
 var (
 	// mutex protecting this block
 	lock sync.RWMutex
@@ -83,10 +93,10 @@ var (
 	Client *mautrix.Client
 
 	// handles are the current handlers
-	handles map[string][]Callback
+	handles map[string][]Callback = defaultHandles
 
 	// limit are the allowed requests/second
-	limit = time.Tick(time.Millisecond * 200)
+	limit = time.NewTicker(time.Millisecond * 200).C
 
 	pool pgxpool.Pool
 
@@ -96,15 +106,4 @@ var (
 	rules []string
 
 	permittedRooms []id.RoomID
-
 )
-
-var defaultHandles = map[string][]Callback{
-	"ban":       {{BanUser, 1}},
-	"import":    {{ImportList, 1}},
-	"mute":      {{MuteUser, 1}},
-	"pin":       {{Function: PinMessage}},
-	"purge":     {{Function: CommandPurge}},
-	"say":       {{SayMessage, 1}},
-	"umute":     {{UnmuteUser, 1}},
-}

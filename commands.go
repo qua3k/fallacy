@@ -195,7 +195,6 @@ func MuteUser(body []string, ev event.Event) {
 	}
 	msg := strings.Join([]string{body[0], "was muted by", ev.Sender.String(), "in", ev.RoomID.String()}, " ")
 	sendNotice(ev.RoomID, msg)
-	return
 }
 
 // UnmuteUser unmutes a target user in a specified room by utilizing power levels.
@@ -220,7 +219,6 @@ func UnmuteUser(body []string, ev event.Event) {
 	}
 	msg := strings.Join([]string{body[0], "was unmuted by", ev.Sender.String(), "in", ev.RoomID.String()}, " ")
 	sendNotice(ev.RoomID, msg)
-	return
 }
 
 // PinMessage pins the replied-to event.
