@@ -100,3 +100,29 @@ attacker could potentially leverage this to cause numerous unwanted updates,
 but we felt that this was a necessary evil.
 
 However, this may still be subject to change in the future.
+
+## Bot Admin(s)
+
+This would be a set of users that would be able to configure bot-specific
+settings in any room they share with the bot, such as modifying the
+configuration on the fly (wanted for a future feature). Bot admins should be
+able to add other bot admins without restarting the bot.
+
+## Dynamic Configuration
+
+We can modify the read string slice in-memory, but we want to be able to persist
+that configuration change to disk. This will involve checking for the existence
+of the TOML key, finding the ending bracket (`]`), checking for the existence
+of a trailing comma, and appending it to the array. This should be disabled by
+default, as I'm not entirely confident in the parsing :)
+
+## Restricted Mode
+
+fallacy was designed around the notion of a public service bot akin to other
+Telegram moderation bots, and as such has made numerous design decisions such
+as foregoing Mjolnir's privileged moderation room, instead only checking power
+levels. This makes it difficult to self-host for admins who are adverse to
+others using their bot, and as such, the bot ignores invites by default. This
+is changing with the addition of restricted mode, an additional option in the
+TOML config (`permitted_rooms`) that allows bot admins to specify which rooms
+the bot will operate in, ignoring all other rooms.
