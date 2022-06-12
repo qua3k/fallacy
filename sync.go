@@ -129,6 +129,7 @@ func (s *FallacySyncer) OnFailedSync(res *mautrix.RespSync, err error) (time.Dur
 func (s *FallacySyncer) GetFilterJSON(id.UserID) *mautrix.Filter {
 	return &mautrix.Filter{
 		Room: mautrix.RoomFilter{
+			Rooms: permittedRooms,
 			Timeline: mautrix.FilterPart{
 				Types: []event.Type{
 					event.EventMessage,
