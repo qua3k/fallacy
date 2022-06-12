@@ -7,7 +7,6 @@ package fallacy
 import (
 	"log"
 	"strings"
-	"time"
 
 	"github.com/gobwas/glob"
 	"maunium.net/go/mautrix"
@@ -70,83 +69,28 @@ func notifyListeners(command []string, ev event.Event) {
 	sendNotice(ev.RoomID, command[1]+" is not a valid command!")
 }
 
-// basic pow function
-func intPow(x, y int) int {
-	switch {
-	case y == 0 || x == 1:
-		return 1
-	case y == 1:
-		return x
-	}
-	r := x
-	for i := 2; i <= y; i++ {
-		r = r * x
-	}
-	return r
-}
-
-func retryBackoff(err mautrix.HTTPError, retries int) int {
-	if !err.Is(mautrix.MLimitExceeded) || retries > 4 {
-		return -1
-	}
-	return 1000 * intPow(2, retries)
-}
-
-func isRetry(err mautrix.HTTPError) bool {
-	if !err.Is(mautrix.MLimitExceeded) {
-		return false
-	}
-	err.Response.Header.Get("Retry-After")
-	return true
-}
-
 // sendNotice is a wrapper around Client.SendNotice that logs when sending a
 // notice fails.
 func sendNotice(roomID id.RoomID, text ...string) (resp *mautrix.RespSendEvent) {
-	var retries int
-	err := handleLimit(retries, func() (e error) {
-		resp, e = Client.SendNotice(roomID, strings.Join(text, " "))
-		return
-	})
+	<-limit
+	resp, err := Client.SendNotice(roomID, strings.Join(text, " "))
 	if err != nil {
 		log.Println("could not send notice into room", roomID, "failed with error:", err)
 	}
 	return
 }
 
-// handleLimit automatically handles the rate limit, utilizing exponential
-// backoff.
-func handleLimit(retries int, f func() error) error {
-	<-limit
-	err, ok := f().(mautrix.HTTPError)
-	if !ok || !err.Is(mautrix.MLimitExceeded) {
-		return nil
-	}
-
-	if retries < 5 {
-		s := intPow(2, retries)
-		time.Sleep(time.Second * time.Duration(s))
-		retries++
-		return handleLimit(retries, f)
-	}
-	return err
-}
-
 // sendReply sends a message as a reply to another message.
-func sendReply(ev event.Event, s string) (resp *mautrix.RespSendEvent, err error) {
-	var retries int
-	handleLimit(retries, func() error {
-		resp, err = Client.SendMessageEvent(ev.RoomID, event.EventMessage, &event.MessageEventContent{
-			MsgType: event.MsgText,
-			Body:    s,
-			RelatesTo: &event.RelatesTo{
-				Type:    event.RelReply,
-				EventID: ev.ID,
-			},
-		})
-		return err
+func sendReply(ev event.Event, s string) (*mautrix.RespSendEvent, error) {
+	<-limit
+	return Client.SendMessageEvent(ev.RoomID, event.EventMessage, &event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    s,
+		RelatesTo: &event.RelatesTo{
+			Type:    event.RelReply,
+			EventID: ev.ID,
+		},
 	})
-	return
 }
 
 func minAdmin(pl *event.PowerLevelsEventContent) (min int) {

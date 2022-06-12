@@ -26,10 +26,9 @@ func RedactMessage(ev event.Event) (err error) {
 	}
 
 	if ev.Type != event.EventRedaction && ev.Unsigned.RedactedBecause == nil {
-		handleLimit(0, func() error {
-			_, err = Client.RedactEvent(ev.RoomID, ev.ID, mautrix.ReqRedact{})
-			return err
-		})
+		<-limit
+		_, err = Client.RedactEvent(ev.RoomID, ev.ID, mautrix.ReqRedact{})
+		return
 	}
 	return
 }
