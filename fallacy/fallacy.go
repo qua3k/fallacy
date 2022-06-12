@@ -39,13 +39,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := fallacy.New(c)
+	err := c.New()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "creating fallacy struct failed with", err)
 		os.Exit(1)
 	}
 
-	err = fallacy.Login(c)
+	err = c.Login()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "logging into %s failed with %v\n", c.Homeserver, err)
 		os.Exit(1)

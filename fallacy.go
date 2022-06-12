@@ -14,35 +14,41 @@ import (
 )
 
 type Config struct {
+	// the homeserver to connect to, e.g., https://matrix-client.matrix.org
 	Homeserver string
-	Username   string
-	Password   string
-	Name       string
+	// the username (mxid) to connect with, e.g., @fallacy:matrix.org
+	Username id.UserID
+	// the password to the account
+	Password string
+	// the name of the bot
+	Name string
+	// the rooms the bot responds in, omit to allow all rooms
+	PermittedRooms []id.RoomID `toml:"permitted_rooms"`
 }
 
 // New initializes the library and should be called before any other functions.
 // It is safe to call more than once, as it is only initialized once.
-func New(c Config) (err error) {
-	once.Do(func() {
-		lock.Lock()
-		defer lock.Unlock()
+func (c Config) New() error {
+	lock.Lock()
+	defer lock.Unlock()
 
-		newClient, e := mautrix.NewClient(c.Homeserver, id.UserID(c.Username), "")
-		if e != nil {
-			err = e
-			return
+	if !once {
+		new, err := mautrix.NewClient(c.Homeserver, c.Username, "")
+		if err != nil {
+			return err
 		}
 
-		Client = newClient
-		handles = defaultHandles
-	})
-	return
+		Client = new
+		once = true
+		permittedRooms = c.PermittedRooms
+	}
+	return nil
 }
 
-func Login(c Config) error {
+func (c Config) Login() error {
 	_, err := Client.Login(&mautrix.ReqLogin{
 		Identifier: mautrix.UserIdentifier{
-			User: c.Username,
+			User: string(c.Username),
 			Type: mautrix.IdentifierTypeUser,
 		},
 		InitialDeviceDisplayName: c.Name,
@@ -70,7 +76,7 @@ var (
 	lock sync.RWMutex
 
 	// initialize this block one time only
-	once sync.Once
+	once bool
 
 	// Client is the currently connected Client
 	Client *mautrix.Client
@@ -85,6 +91,8 @@ var (
 	firefox, welcome bool
 	// this is supposed to be join rules
 	rules []string
+	permittedRooms []id.RoomID
+
 )
 
 var defaultHandles = map[string][]Callback{
