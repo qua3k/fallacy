@@ -51,7 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	syncer := fallacy.NewFallacySyncer()
+	syncer := fallacy.NewSyncer()
 	syncer.OnEventType(event.StatePolicyUser, fallacy.HandleUserPolicy)
 	syncer.OnEventType(event.StateMember, fallacy.HandleMember)
 	syncer.OnEventType(event.EventMessage, fallacy.HandleMessage)
