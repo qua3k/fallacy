@@ -6,9 +6,9 @@
 
 ## About
 
-Fallacy is a custom high performance Matrix moderation bot written for [Spite]
-(https://matrix.to/#spitetech:matrix.org). Born out of the deficiencies of
-similar moderation bots, it aims to be simple, fast, and efficient.
+Fallacy is a custom high performance Matrix moderation bot written for
+[Spite](https://matrix.to/#spitetech:matrix.org). Born out of the deficiencies
+of similar moderation bots, it aims to be simple, fast, and efficient.
 
 Much of the design was inspired by [@rSophieBot](https://t.me/rSophieBot).
 
