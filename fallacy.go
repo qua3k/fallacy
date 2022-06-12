@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v4/pgxpool"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
 )
@@ -87,10 +88,13 @@ var (
 	// limit are the allowed requests/second
 	limit = time.Tick(time.Millisecond * 200)
 
+	pool pgxpool.Pool
+
 	// some room specific settings, should be migrated...
 	firefox, welcome bool
 	// this is supposed to be join rules
 	rules []string
+
 	permittedRooms []id.RoomID
 
 )
