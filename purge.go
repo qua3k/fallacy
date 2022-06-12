@@ -33,13 +33,10 @@ func RedactMessage(ev event.Event) (err error) {
 	return
 }
 
-// redactUser is a simple wrapper around RedactMessage checking if the sender
-// matches the user ID.
-func redactUser(user id.UserID, ev event.Event) (err error) {
-	if ev.Sender != user {
-		return nil
+func redactMessage(ev event.Event) {
+	if err := RedactMessage(ev); err != nil {
+		log.Println(err)
 	}
-	return RedactMessage(ev)
 }
 
 func doMessages(resp *mautrix.RespMessages, err error) (*mautrix.RespMessages, error) {
@@ -82,11 +79,7 @@ func PurgeUser(body []string, ev event.Event) {
 				}
 				i++
 			}
-			go func(e event.Event) {
-				if err := redactUser(user, e); err != nil {
-					log.Println(err)
-				}
-			}(*e)
+			go redactMessage(*e)
 		}
 		msg, err = doMessages(Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, fetchLimit))
 	}
@@ -114,11 +107,7 @@ func PurgeMessages(body []string, ev event.Event) {
 
 	for err == nil {
 		for _, e := range msg.Chunk {
-			go func(e event.Event) {
-				if err := RedactMessage(e); err != nil {
-					log.Println(err)
-				}
-			}(*e)
+			go redactMessage(*e)
 			if e.ID == ev.ID {
 				sendNotice(ev.RoomID, "Purging messages done!")
 				return
