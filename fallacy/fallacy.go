@@ -57,9 +57,7 @@ func main() {
 	syncer.OnEventType(event.EventMessage, fallacy.HandleMessage)
 	syncer.OnEventType(event.StateTombstone, fallacy.HandleTombstone)
 
-	old := &mautrix.OldEventIgnorer{
-		UserID: fallacy.Client.UserID,
-	}
+	old := mautrix.OldEventIgnorer{UserID: fallacy.Client.UserID}
 	old.Register(syncer)
 	fallacy.Client.Syncer = syncer
 
