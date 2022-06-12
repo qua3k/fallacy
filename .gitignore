@@ -18,8 +18,7 @@
 cpuprofile
 
 # undone stuff
-undone.go
-synapse/
+internal/
 
 # some configs
 *.toml
