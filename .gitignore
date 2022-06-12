@@ -19,6 +19,7 @@ cpuprofile
 
 # undone stuff
 undone.go
+synapse/
 
 # some configs
 *.toml
