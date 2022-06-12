@@ -38,7 +38,7 @@ var stateType = []event.Type{
 }
 
 // purgeFilter is the standard filter for purging messages, omitting state events.
-var purgeFilter = mautrix.FilterPart{LazyLoadMembers: true, NotTypes: stateType}
+var purgeFilter = &mautrix.FilterPart{LazyLoadMembers: true, NotTypes: stateType}
 
 func userFilter(user id.UserID) mautrix.FilterPart {
 	return mautrix.FilterPart{

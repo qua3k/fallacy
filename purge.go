@@ -69,14 +69,10 @@ func PurgeUser(body []string, ev event.Event) {
 
 	filter := userFilter(user)
 	msg, err := doMessages(Client.Messages(ev.RoomID, "", "", 'b', &filter, fetchLimit))
-	if err != nil {
-		log.Println(err)
-		return
-	}
 
 	var prev string
 	var i int
-	for msg.End != prev {
+	for msg.End != prev && err == nil {
 		prev = msg.End
 		for _, e := range msg.Chunk {
 			if limit {
@@ -93,11 +89,8 @@ func PurgeUser(body []string, ev event.Event) {
 			}(*e)
 		}
 		msg, err = doMessages(Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, fetchLimit))
-		if err != nil {
-			log.Println(err)
-			return
-		}
 	}
+	log.Println(err)
 }
 
 // PurgeMessages redacts all message events newer than the specified event ID.
@@ -109,21 +102,17 @@ func PurgeMessages(body []string, ev event.Event) {
 		return
 	}
 
-	c, err := Client.Context(ev.RoomID, relate.EventID, &purgeFilter, 1)
+	c, err := Client.Context(ev.RoomID, relate.EventID, purgeFilter, 1)
 	if err != nil {
 		log.Println("fetching context failed with error", err)
 		return
 	}
 	go RedactMessage(*c.Event)
 
-	msg, err := doMessages(Client.Messages(ev.RoomID, c.End, "", 'f', &purgeFilter, fetchLimit))
-	if err != nil {
-		log.Println("fetching messages failed with error:", err)
-		return
-	}
-
+	msg, err := doMessages(Client.Messages(ev.RoomID, c.End, "", 'f', purgeFilter, fetchLimit))
 	msg.Chunk = append(c.EventsAfter, msg.Chunk...)
-	for {
+
+	for err == nil {
 		for _, e := range msg.Chunk {
 			go func(e event.Event) {
 				if err := RedactMessage(e); err != nil {
@@ -135,12 +124,9 @@ func PurgeMessages(body []string, ev event.Event) {
 				return
 			}
 		}
-		msg, err = doMessages(Client.Messages(ev.RoomID, msg.End, "", 'f', &purgeFilter, fetchLimit))
-		if err != nil {
-			log.Println("fetching context failed with error", err)
-			return
-		}
+		msg, err = doMessages(Client.Messages(ev.RoomID, msg.End, "", 'f', purgeFilter, fetchLimit))
 	}
+	log.Println("fetching messages failed with error", err)
 }
 
 // CommandPurge is a simple function to be invoked by the purge keyword.
