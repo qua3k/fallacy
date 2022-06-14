@@ -207,7 +207,7 @@ func ImportList(body []string, ev event.Event) {
 }
 
 var (
-	errNotUser     error = errors.New("could not ban user, not a valid glob or user id!")
-	errPowerLevels error = errors.New("could not fetch power levels!")
-	errMembers     error = errors.New("could not fetch joined members!")
+	errNotUser     = errors.New("could not ban user, not a valid glob or user id")
+	errPowerLevels = errors.New("could not fetch power levels")
+	errMembers     = errors.New("could not fetch joined members")
 )

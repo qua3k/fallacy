@@ -7,6 +7,7 @@
 package fallacy
 
 import (
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"time"
@@ -43,7 +44,7 @@ func NewSyncer() *Syncer {
 func (s *Syncer) ProcessResponse(res *mautrix.RespSync, since string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("ProcessResponse panicked! since=%s panic=%s\n%s", since, r, debug.Stack())
+			err = fmt.Errorf("%w since=%s panic=%s\n%s", errProcessPanic, since, r, debug.Stack())
 		}
 	}()
 
@@ -142,3 +143,7 @@ func (s *Syncer) GetFilterJSON(id.UserID) *mautrix.Filter {
 		},
 	}
 }
+
+var (
+	errProcessPanic = errors.New("ProcessResponse panicked")
+)

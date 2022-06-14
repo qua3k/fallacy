@@ -41,7 +41,7 @@ func redactMessage(ev event.Event) {
 
 func doMessages(resp *mautrix.RespMessages, err error) (*mautrix.RespMessages, error) {
 	if resp == nil {
-		return resp, errors.New("/messages response was nil, server has nothing to send us")
+		return resp, errNilMsgResponse
 	}
 	return resp, err
 }
@@ -131,3 +131,7 @@ func CommandPurge(body []string, ev event.Event) {
 	}
 	PurgeMessages(body, ev)
 }
+
+var (
+	errNilMsgResponse = errors.New("/messages response was nil, server has nothing to send us")
+)

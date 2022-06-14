@@ -34,12 +34,12 @@ func (c Config) New() error {
 	defer lock.Unlock()
 
 	if !once {
-		new, err := mautrix.NewClient(c.Homeserver, c.Username, "")
+		client, err := mautrix.NewClient(c.Homeserver, c.Username, "")
 		if err != nil {
 			return err
 		}
 
-		Client = new
+		Client = client
 		once = true
 		permittedRooms = c.PermittedRooms
 	}
@@ -93,7 +93,7 @@ var (
 	Client *mautrix.Client
 
 	// handles are the current handlers
-	handles map[string][]Callback = defaultHandles
+	handles = defaultHandles
 
 	// limit are the allowed requests/second
 	limit = time.NewTicker(time.Millisecond * 200).C
