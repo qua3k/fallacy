@@ -178,7 +178,8 @@ func ImportList(body []string, ev event.Event) {
 		return
 	}
 
-	if _, err := Client.JoinRoomByID(roomID); err != nil {
+	_, hs, _ := ev.Sender.ParseAndDecode()
+	if _, err := Client.JoinRoom(string(roomID), hs, nil); err != nil {
 		sendNotice(ev.RoomID, "could not join room", roomID.String(), "failed with:", err.Error())
 		return
 	}
