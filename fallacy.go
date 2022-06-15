@@ -18,7 +18,7 @@ type Config struct {
 	// the name of the bot
 	Name string
 	// Device ID, use for avoiding flooding sessions with device IDs.
-	DeviceID id.DeviceID `toml:device_id`
+	DeviceID id.DeviceID `toml:"device_id"`
 
 	// the homeserver to connect to, e.g., https://matrix-client.matrix.org
 	Homeserver string
