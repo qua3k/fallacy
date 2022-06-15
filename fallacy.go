@@ -15,14 +15,18 @@ import (
 )
 
 type Config struct {
+	// the name of the bot
+	Name string
+	// Device ID, use for avoiding flooding sessions with device IDs.
+	DeviceID id.DeviceID `toml:device_id`
+
 	// the homeserver to connect to, e.g., https://matrix-client.matrix.org
 	Homeserver string
 	// the username (mxid) to connect with, e.g., @fallacy:matrix.org
 	Username id.UserID
 	// the password to the account
 	Password string
-	// the name of the bot
-	Name string
+
 	// the rooms the bot responds in, omit to allow all rooms
 	PermittedRooms []id.RoomID `toml:"permitted_rooms"`
 }
@@ -48,6 +52,7 @@ func (c Config) New() error {
 
 func (c Config) Login() error {
 	_, err := Client.Login(&mautrix.ReqLogin{
+		DeviceID: c.DeviceID,
 		Identifier: mautrix.UserIdentifier{
 			User: string(c.Username),
 			Type: mautrix.IdentifierTypeUser,
