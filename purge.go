@@ -39,8 +39,8 @@ func redactMessage(ev event.Event) {
 	}
 }
 
-func doMessages(resp *mautrix.RespMessages, err error) (*mautrix.RespMessages, error) {
-	if resp == nil {
+func validate(resp *mautrix.RespMessages, err error) (*mautrix.RespMessages, error) {
+	if err == nil && resp == nil {
 		return resp, errNilMsgResponse
 	}
 	return resp, err
@@ -65,11 +65,11 @@ func PurgeUser(body []string, ev event.Event) {
 	}
 
 	filter := userFilter(user)
-	msg, err := doMessages(Client.Messages(ev.RoomID, "", "", 'b', &filter, fetchLimit))
+	msg, err := validate(Client.Messages(ev.RoomID, "", "", 'b', &filter, fetchLimit))
 
 	var prev string
 	var i int
-	for msg.End != prev && err == nil {
+	for err == nil && msg.End != prev {
 		prev = msg.End
 		for _, e := range msg.Chunk {
 			if limit {
@@ -81,9 +81,9 @@ func PurgeUser(body []string, ev event.Event) {
 			}
 			go redactMessage(*e)
 		}
-		msg, err = doMessages(Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, fetchLimit))
+		msg, err = validate(Client.Messages(ev.RoomID, msg.End, "", 'b', &filter, fetchLimit))
 	}
-	log.Println(err)
+	log.Println("purging user messages failed with", err)
 }
 
 // PurgeMessages redacts all message events newer than the specified event ID.
@@ -102,8 +102,10 @@ func PurgeMessages(body []string, ev event.Event) {
 	}
 	go RedactMessage(*c.Event)
 
-	msg, err := doMessages(Client.Messages(ev.RoomID, c.End, "", 'f', purgeFilter, fetchLimit))
-	msg.Chunk = append(c.EventsAfter, msg.Chunk...)
+	msg, err := validate(Client.Messages(ev.RoomID, c.End, "", 'f', purgeFilter, fetchLimit))
+	if msg != nil {
+		msg.Chunk = append(c.EventsAfter, msg.Chunk...)
+	}
 
 	for err == nil {
 		for _, e := range msg.Chunk {
@@ -113,9 +115,9 @@ func PurgeMessages(body []string, ev event.Event) {
 				return
 			}
 		}
-		msg, err = doMessages(Client.Messages(ev.RoomID, msg.End, "", 'f', purgeFilter, fetchLimit))
+		msg, err = validate(Client.Messages(ev.RoomID, msg.End, "", 'f', purgeFilter, fetchLimit))
 	}
-	log.Println("fetching messages failed with error", err)
+	log.Println("fetching messages failed with", err)
 }
 
 // CommandPurge is a simple function to be invoked by the purge keyword.
