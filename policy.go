@@ -6,9 +6,7 @@ package fallacy
 
 import (
 	"errors"
-	"log"
 	"strings"
-	"sync"
 
 	"github.com/gobwas/glob"
 	"golang.org/x/sync/errgroup"
@@ -18,116 +16,133 @@ import (
 )
 
 // the options struct for banning people
-type options struct {
-	User   string
-	RoomID id.RoomID
+type options[T modReq, U modResp] struct {
+	userID string
 
-	Members *mautrix.RespJoinedMembers
-	Power   *event.PowerLevelsEventContent
+	// the glob compiled from userID
+	glb    glob.Glob
+	roomID id.RoomID
+
+	members *mautrix.RespJoinedMembers
+	power   *event.PowerLevelsEventContent
+
+	// action to take if a joined member matches the userID
+	action func(id.RoomID, *T) (*U, error)
 }
 
-// globBan bans any member in the room matching the specified glob. It returns
-// an error on the first non-nil error.
-func globBan(roomID id.RoomID, glb glob.Glob) (err error) {
-	pl, err := powerLevels(roomID)
-	if err != nil {
-		return
-	}
-
-	jm, err := Client.JoinedMembers(roomID)
-	if err != nil {
-		return
-	}
-
-	var g errgroup.Group
-	for user := range jm.Joined {
-		m, u := minAdmin(pl), user
-		if !glb.Match(string(user)) || pl.GetUserLevel(user) >= m {
-			continue
-		}
-
-		g.Go(func() error {
-			_, err := Client.BanUser(roomID, &mautrix.ReqBanUser{
-				Reason: "u jus got glob ban",
-				UserID: u,
-			})
-			return err
-		})
-	}
-	return g.Wait()
-}
-
-// globBanState is like glob ban but takes power levels and a joined_members
-// response. Useful for banning lots of people.
-func globBanState(roomID id.RoomID, glb glob.Glob, members *mautrix.RespJoinedMembers,
-	power *event.PowerLevelsEventContent) (err error) {
-
-	var g errgroup.Group
-	for user := range members.Joined {
-		m, u := minAdmin(power), user
-		if !glb.Match(string(user)) || power.GetUserLevel(user) >= m {
-			continue
-		}
-
-		g.Go(func() error {
-			_, err := Client.BanUser(roomID, &mautrix.ReqBanUser{
-				Reason: "u jus got glob ban",
-				UserID: u,
-			})
-			return err
-		})
-	}
-	return g.Wait()
-}
-
-// BanUser bans a glob or MXID from the room.
-func BanUser(body []string, ev event.Event) {
-	pl, err := powerLevels(ev.RoomID)
-	if err != nil {
-		sendNotice(ev.RoomID, errPowerLevels.Error(), "failed with error", err.Error())
-		return
-	}
-
-	if pl.Ban() > pl.GetUserLevel(Client.UserID) {
-		sendNotice(ev.RoomID, permsMessage)
-		return
-	}
-
-	jm, err := Client.JoinedMembers(ev.RoomID)
-	if err != nil {
-		sendNotice(ev.RoomID, errMembers.Error(), "failed with", err.Error())
-	}
-	matchBan(options{body[0], ev.RoomID, jm, pl})
-}
-
-// Interactively bans a user based on whether they are a glob or a MXID.
-//
-// The glob matching is able to do matching with a literal but structuring it
-// this way allows users to preemptively ban problematic users.
-func matchBan(opt options) error {
-	switch {
-	case strings.Contains(opt.User, "*"), strings.Contains(opt.User, "?"):
-		glb, err := glob.Compile(opt.User)
+// init ensures that options struct has power levels and joined_members,
+// otherwise error out
+func (o *options[T, U]) init() error {
+	if o.members == nil {
+		m, err := Client.JoinedMembers(o.roomID)
 		if err != nil {
 			return err
 		}
-
-		if opt.Power == nil {
-			return globBan(opt.RoomID, glb)
+		o.members = m
+	}
+	if o.power == nil {
+		p, err := powerLevels(o.roomID)
+		if err != nil {
+			return err
 		}
-		return globBanState(opt.RoomID, glb, opt.Members, opt.Power)
-	case opt.User[0] == '@':
-		_, err := Client.BanUser(opt.RoomID, &mautrix.ReqBanUser{
-			UserID: id.UserID(opt.User),
+		o.power = p
+	}
+	return nil
+}
+
+type (
+	modReq interface {
+		mautrix.ReqKickUser | mautrix.ReqBanUser
+	}
+	modResp interface {
+		mautrix.RespKickUser | mautrix.RespBanUser
+	}
+)
+
+// globMatch is a generic function to kick or ban joined users matching the glob
+// from the room. It returns an error on the first non-nil error.
+func (o options[T, U]) globMatch() error {
+	if err := o.init(); err != nil {
+		return err
+	}
+	lvl := adminLevel(o.power)
+
+	var g errgroup.Group
+	for user := range o.members.Joined {
+		u := user
+		if !o.glb.Match(string(u)) || o.power.GetUserLevel(u) >= lvl {
+			continue
+		}
+		g.Go(func() error {
+			_, err := o.action(o.roomID, &T{
+				Reason: "u just got globbed",
+				UserID: u,
+			})
+			return err
 		})
+	}
+	return g.Wait()
+}
+
+// Interactively action on a user based on whether they are a glob or a MXID.
+//
+// The glob matching is able to do matching with a literal but structuring it
+// this way allows users to preemptively ban problematic users.
+func (o options[T, U]) dispatchAction() error {
+	switch {
+	case strings.Contains(o.userID, "*"), strings.Contains(o.userID, "?"):
+		glb, err := glob.Compile(o.userID)
+		if err != nil {
+			return err
+		}
+		o.glb = glb
+		return o.globMatch()
+	case o.userID[0] == '@':
+		_, err := o.action(o.roomID, &T{UserID: id.UserID(o.userID)})
 		return err
 	}
 	return errNotUser
 }
 
-func processBans(evs map[string]*event.Event, roomID id.RoomID, members *mautrix.RespJoinedMembers,
-	power *event.PowerLevelsEventContent) {
-	var once sync.Once
+func moderateUser[T modReq, U modResp](roomID id.RoomID, userID string,
+	f func(id.RoomID, *T) (*U, error)) error {
+	pl, err := powerLevels(roomID)
+	if err != nil {
+		return err
+	}
+
+	if pl.Ban() > pl.GetUserLevel(Client.UserID) {
+		return errNoPerms
+	}
+
+	jm, err := Client.JoinedMembers(roomID)
+	if err != nil {
+		return err
+	}
+
+	opt := options[T, U]{
+		userID:  userID,
+		roomID:  roomID,
+		power:   pl,
+		members: jm,
+		action:  f,
+	}
+	return opt.dispatchAction()
+}
+
+func BanUser(body []string, ev event.Event) {
+	if err := moderateUser(ev.RoomID, body[0], Client.BanUser); err != nil {
+		sendNotice(ev.RoomID, "banning user failed with", err.Error())
+	}
+}
+
+func KickUser(body []string, ev event.Event) {
+	if err := moderateUser(ev.RoomID, body[0], Client.KickUser); err != nil {
+		sendNotice(ev.RoomID, "kicking user failed with", err.Error())
+	}
+}
+
+func (o options[T, U]) processBans(evs map[string]*event.Event) error {
 	for key, ev := range evs {
 		r, ok := ev.Content.Raw["recommendation"].(string)
 		if !ok {
@@ -138,19 +153,34 @@ func processBans(evs map[string]*event.Event, roomID id.RoomID, members *mautrix
 		if !ok {
 			continue
 		}
+		o.userID = e
 
 		switch r {
 		case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove legacy mjolnir ban
-			_, err := Client.SendStateEvent(roomID, event.StatePolicyUser, key, &ev.Content)
+			_, err := Client.SendStateEvent(o.roomID, event.StatePolicyUser, key, &ev.Content)
 			if err != nil {
-				once.Do(func() {
-					sendNotice(roomID, "could not send state event, proceeding")
-				})
-				log.Println(err)
+				return err
 			}
-			matchBan(options{e, roomID, members, power})
+			if o.dispatchAction() != nil {
+				return err
+			}
 		}
 	}
+	return nil
+}
+
+func resolveRoom(roomID string) (id.RoomID, error) {
+	switch roomID[0] {
+	case '#':
+		r, err := Client.ResolveAlias(id.RoomAlias(roomID))
+		if err != nil {
+			return "", err
+		}
+		return r.RoomID, nil
+	case '!':
+		return id.RoomID(roomID), nil
+	}
+	return "", errInvalidRoom
 }
 
 // ImportList imports a banlist from another room.
@@ -160,16 +190,11 @@ func ImportList(body []string, ev event.Event) {
 		return
 	}
 
-	roomID := id.RoomID(body[0])
-	if roomID[0] == '#' {
-		r, err := Client.ResolveAlias(id.RoomAlias(roomID))
-		if err != nil {
-			sendNotice(ev.RoomID, "Could not resolve room alias, failed with", err.Error())
-			return
-		}
-		roomID = r.RoomID
-	} else if roomID[0] != '!' {
-		sendNotice(ev.RoomID, "Not a valid room ID!")
+	powerLevels(ev.RoomID)
+
+	roomID, err := resolveRoom(body[0])
+	if err != nil {
+		sendNotice(ev.RoomID, err.Error())
 		return
 	}
 
@@ -202,13 +227,46 @@ func ImportList(body []string, ev event.Event) {
 		return
 	}
 
-	processBans(s[event.StatePolicyUser], ev.RoomID, jm, pl)
-	processBans(s[event.NewEventType("m.room.rule.user")], ev.RoomID, jm, pl)
+	opt := options[mautrix.ReqBanUser, mautrix.RespBanUser]{
+		roomID:  ev.RoomID,
+		members: jm,
+		power:   pl,
+		action:  Client.BanUser,
+	}
+	if err = opt.processBans(s[event.StatePolicyUser]); err != nil {
+		sendNotice(ev.RoomID, "processing bans failed with", err.Error())
+		return
+	}
+	opt.processBans(s[event.NewEventType("m.room.rule.user")])
 	sendNotice(ev.RoomID, "Finished importing list from", body[0])
 }
 
+func createBanList(sender id.UserID, room string) (id.RoomID, error) {
+	display := string(sender)
+	r, err := Client.GetDisplayName(sender)
+	if err == nil {
+		display = r.DisplayName
+	}
+
+	resp, err := Client.CreateRoom(&mautrix.ReqCreateRoom{
+		Invite: []id.UserID{sender},
+		Name:   room,
+		PowerLevelOverride: &event.PowerLevelsEventContent{
+			EventsDefault: 50,
+			Users: map[id.UserID]int{
+				sender:        100,
+				Client.UserID: 50,
+			},
+		},
+		Preset: "trusted_private_chat",
+		Topic:  "ban list created by " + display,
+	})
+	return resp.RoomID, err
+}
+
 var (
+	errInvalidRoom = errors.New("not a valid room ID")
+	errMembers     = errors.New("could not fetch joined members")
 	errNotUser     = errors.New("could not ban user, not a valid glob or user id")
 	errPowerLevels = errors.New("could not fetch power levels")
-	errMembers     = errors.New("could not fetch joined members")
 )

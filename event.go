@@ -22,41 +22,33 @@ func isUnreadable(r byte) bool {
 	return false
 }
 
-// HandleUserPolicy handles m.policy.rule.user events by banning literals and
-// glob banning globs.
-func HandleUserPolicy(s mautrix.EventSource, ev *event.Event) {
+func handlePolicy(ev *event.Event, f func() error) {
 	if ev.Sender == Client.UserID {
 		return
 	}
 
 	m := ev.Content.AsModPolicy()
-
 	switch m.Recommendation {
-	// TODO: remove non-spec mjolnir recommendation
-	case "m.ban", "org.matrix.mjolnir.ban":
-		if err := matchBan(options{User: m.Entity, RoomID: ev.RoomID}); err == errNotUser {
-			sendNotice(ev.RoomID, "not a valid glob pattern!")
-		} else if err != nil {
-			log.Println(err)
+	case "m.ban", "org.matrix.mjolnir.ban": // TODO: remove non-spec mjolnir recommendation
+		if err := f(); err != nil {
+			sendNotice(ev.RoomID, "handling moderation policy failed with", err.Error())
 		}
 	}
+}
+
+// HandleUserPolicy handles m.policy.rule.user events by banning literals and
+// glob banning globs.
+func HandleUserPolicy(s mautrix.EventSource, ev *event.Event) {
+	e := ev.Content.AsModPolicy().Entity
+	handlePolicy(ev, options[mautrix.ReqBanUser,
+		mautrix.RespBanUser]{userID: e, roomID: ev.RoomID}.dispatchAction)
 }
 
 // HandleServerPolicy handles m.policy.rule.server events. Initially limited to
 // room admins but could possibly be extended to members of specific rooms.
 func HandleServerPolicy(s mautrix.EventSource, ev *event.Event) {
-	if ev.Sender == Client.UserID {
-		return
-	}
-
-	m := ev.Content.AsModPolicy()
-	switch m.Recommendation {
-	// TODO: remove non-spec mjolnir recommendation
-	case "m.ban", "org.matrix.mjolnir.ban":
-		if err := BanServer(ev.RoomID, m.Entity); err != nil {
-			log.Println(err)
-		}
-	}
+	e := ev.Content.AsModPolicy().Entity
+	handlePolicy(ev, func() error { return BanServer(ev.RoomID, e) })
 }
 
 // HandleMember handles `m.room.member` events.

@@ -5,6 +5,7 @@
 package fallacy
 
 import (
+	"errors"
 	"log"
 	"strings"
 
@@ -16,10 +17,14 @@ import (
 
 const (
 	// Message to be sent when fallacy does not have sufficient permissions.
-	permsMessage = "Fallacy does not have sufficient permission to perform that action!"
+	permsMessage = "fallacy does not have sufficient permission to perform that action"
 
 	// Usage message to be sent when asking for help.
 	usage = "Hey, check out the usage guide at https://github.com/qua3k/fallacy/blob/main/USAGE.md"
+)
+
+var (
+	errNoPerms = errors.New(permsMessage)
 )
 
 type Callback struct {
@@ -93,17 +98,17 @@ func sendReply(ev event.Event, s string) (*mautrix.RespSendEvent, error) {
 	})
 }
 
-func minAdmin(pl *event.PowerLevelsEventContent) (min int) {
-	min = pl.Ban()
+func adminLevel(pl *event.PowerLevelsEventContent) (lvl int) {
+	lvl = pl.Ban()
 
 	k, r := pl.Kick(), pl.Redact()
-	if k < min {
-		min = k
+	if k < lvl {
+		lvl = k
 	}
-	if r < min {
-		min = r
+	if r < lvl {
+		lvl = r
 	}
-	return min
+	return
 }
 
 // isAdmin returns whether the user is a room admin by checking ban/kick/redact
@@ -115,7 +120,7 @@ func isAdmin(roomID id.RoomID, userID id.UserID) bool {
 		return false
 	}
 
-	return pl.GetUserLevel(userID) >= minAdmin(pl)
+	return pl.GetUserLevel(userID) >= adminLevel(pl)
 }
 
 // hasPerms checks whether the fallacy bot has perms.
