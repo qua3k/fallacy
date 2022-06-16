@@ -185,12 +185,21 @@ func resolveRoom(roomID string) (id.RoomID, error) {
 
 // ImportList imports a banlist from another room.
 func ImportList(body []string, ev event.Event) {
-	if !hasPerms(ev.RoomID, event.StatePolicyUser) || !hasPerms(ev.RoomID, event.StateMember) {
-		sendNotice(ev.RoomID, permsMessage)
+	pl, err := powerLevels(ev.RoomID)
+	if err != nil {
+		sendNotice(ev.RoomID, err.Error())
 		return
 	}
 
-	powerLevels(ev.RoomID)
+	lvl := pl.GetEventLevel(event.StatePolicyUser)
+	if b := pl.Ban(); b > lvl {
+		lvl = b
+	}
+
+	if lvl > pl.GetUserLevel(Client.UserID) {
+		sendNotice(ev.RoomID, permsMessage)
+		return
+	}
 
 	roomID, err := resolveRoom(body[0])
 	if err != nil {
@@ -212,12 +221,6 @@ func ImportList(body []string, ev event.Event) {
 	s, err := Client.State(roomID)
 	if err != nil {
 		sendNotice(ev.RoomID, "could not import state from", roomID.String(), "failed with:", err.Error())
-		return
-	}
-
-	pl, err := powerLevels(ev.RoomID)
-	if err != nil {
-		sendNotice(ev.RoomID, errPowerLevels.Error(), "failed with error", err.Error())
 		return
 	}
 
