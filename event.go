@@ -41,7 +41,7 @@ func handlePolicy(ev *event.Event, f func() error) {
 func HandleUserPolicy(s mautrix.EventSource, ev *event.Event) {
 	e := ev.Content.AsModPolicy().Entity
 	handlePolicy(ev, options[mautrix.ReqBanUser,
-		mautrix.RespBanUser]{userID: e, roomID: ev.RoomID}.dispatchAction)
+		mautrix.RespBanUser]{userID: e, roomID: ev.RoomID, action: Client.BanUser}.dispatchAction)
 }
 
 // HandleServerPolicy handles m.policy.rule.server events. Initially limited to
